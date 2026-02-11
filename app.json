@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "herUtility",
+    "name": "Her Utility",
     "slug": "herUtility",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -14,9 +14,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "bundleIdentifier": "com.herutility.app",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.herutility.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -34,6 +36,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "222ef005-bfcd-4642-b4a9-dd2a14e36feb"
+      }
     }
   }
 }

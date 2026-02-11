@@ -1,59 +1,132 @@
-import React from 'react';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Link, Tabs } from 'expo-router';
-import { Pressable } from 'react-native';
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { Tabs, usePathname, useRouter } from "expo-router";
+import { Home, PieChart, Settings, User } from "lucide-react-native";
+import React from "react";
+import { StyleSheet, TouchableOpacity, View } from "react-native";
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
+function CustomTabBar({ state, descriptors, navigation }: any) {
+  const pathname = usePathname();
+  const router = useRouter();
 
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
-  color: string;
-}) {
-  return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
-}
+  const icons: any = {
+    index: Home,
+    portfolio: PieChart,
+    settings: Settings,
+    profile: User,
+  };
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  // Define which routes to hide
+  const hiddenRoutes = ["portfolio", "settings"];
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
-        headerShown: useClientOnlyValue(false, true),
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Tab One',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable>
-                {({ pressed }) => (
-                  <FontAwesome
-                    name="info-circle"
-                    size={25}
-                    color={Colors[colorScheme ?? 'light'].text}
-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
-          ),
+    <View style={styles.tabBarContainer}>
+      <View style={styles.tabBar}>
+        {state.routes
+          .filter((route: any) => !hiddenRoutes.includes(route.name))
+          .map((route: any, index: number) => {
+          const { options } = descriptors[route.key];
+          const isFocused = state.index === state.routes.indexOf(route);
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: "tabPress",
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              router.push(
+                (route.name === "index" ? "/" : `/${route.name}`) as any,
+              );
+            }
+          };
+
+          const IconComponent = icons[route.name] || Home;
+          const color = isFocused ? "#ffffff" : "#666666";
+
+          return (
+            <TouchableOpacity
+              key={route.key}
+              onPress={onPress}
+              style={[styles.tabButton, isFocused && styles.tabButtonActive]}
+            >
+              <IconComponent size={24} color={color} strokeWidth={2.5} />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  tabBarContainer: {
+    position: "absolute",
+    bottom: 25,
+    alignSelf: "center",
+  },
+  tabBar: {
+    backgroundColor: "#000000",
+    borderRadius: 30,
+    height: 60,
+    paddingHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 30,
+  },
+  tabButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 10,
+    borderRadius: 20,
+  },
+  tabButtonActive: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+});
+
+export default function TabLayout() {
+  return (
+    // <GestureHandlerRootView style={styles.container}>
+    <BottomSheetModalProvider>
+      <Tabs
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{
+          headerShown: false,
+          tabBarShowLabel: false,
         }}
-      />
-      <Tabs.Screen
-        name="two"
-        options={{
-          title: 'Tab Two',
-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: "Home",
+          }}
+        />
+        <Tabs.Screen
+          name="portfolio"
+          options={{
+            title: "Portfolio",
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: "Settings",
+            href: null,
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: "Profile",
+          }}
+        />
+      </Tabs>
+    </BottomSheetModalProvider>
+    // </GestureHandlerRootView>
   );
 }
