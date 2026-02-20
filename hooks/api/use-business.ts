@@ -22,6 +22,7 @@ export interface Business {
   _id: string;
   name: string;
   address: string;
+  postcode?: string;
   members: BusinessMember[];
   sites?: string[];
   utilities?: string[];
@@ -126,7 +127,7 @@ export function useBusiness(id: string) {
 export function useCreateBusiness() {
   return useAppMutation<
     ApiResponse<{ business: Business; site?: Site }>,
-    { name: string; address: string; members: BusinessMember[] }
+    { name: string; address: string; postcode: string; members: BusinessMember[] }
   >(
     (input) =>
       api.post<ApiResponse<{ business: Business; site?: Site }>>(
@@ -155,6 +156,8 @@ export function useCreateUtility() {
       previousContractExpiry?: string;
       previousMeterId?: string;
       previousSupplier?: string;
+      email?: string;
+      postcode?: string;
     }
   >(
     (input) =>

@@ -79,32 +79,33 @@ export default function ProfileScreen() {
 
 // --- NEW SETTINGS SCREEN ---
 import { useUpdateUser } from "@/hooks/api/use-user";
+import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth/auth-context";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import {
-    BottomSheetBackdrop,
-    BottomSheetModal,
-    BottomSheetTextInput,
-    BottomSheetView,
+  BottomSheetBackdrop,
+  BottomSheetModal,
+  BottomSheetTextInput,
+  BottomSheetView,
 } from "@gorhom/bottom-sheet";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
 import {
-    Alert,
-    Linking,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TouchableOpacity,
-    View,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
+import Toast from "react-native-toast-message";
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { user, logout, updateUser } = useAuth();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(user?.pushNotificationsEnabled ?? true);
   const updateUserMutation = useUpdateUser(user?.id ?? '');
 
   const editProfileSheetRef = useRef<BottomSheetModal>(null);
@@ -112,13 +113,57 @@ export default function SettingsScreen() {
 
   const openExternal = (url: string) => {
     Linking.openURL(url).catch(() =>
-      Alert.alert("Error", "Unable to open link"),
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Unable to open link",
+      })
     );
   };
 
   const handleLogout = async () => {
     logoutSheetRef.current?.close();
     await logout();
+  };
+
+  const handleToggleNotifications = async (value: boolean) => {
+    try {
+      setNotificationsEnabled(value);
+      
+      if (value) {
+        // We'll need access to the push token. 
+        // For simplicity in this toggle, we might just re-trigger the registration logic
+        // Or assume the token is available in local storage/context if we want to be more granular.
+        // But the backend expects /api/auth/push-token which requires the token in body.
+        // We might need to call registerForPushNotificationsAsync again.
+        const { registerForPushNotificationsAsync } = await import('@/lib/notifications');
+        const token = await registerForPushNotificationsAsync();
+        if (token) {
+          await apiClient.registerPushToken(token);
+        }
+      } else {
+        // For unregistering, the backend needs the token to remove it from the list.
+        // We'll try to find any existing token.
+        if (user?.expoPushTokens && user.expoPushTokens.length > 0) {
+          // Unregister all known tokens for this device/user
+          for (const token of user.expoPushTokens) {
+            await apiClient.unregisterPushToken(token);
+          }
+        }
+      }
+
+      // Persist the preference to user settings as well
+      await updateUserMutation.mutateAsync({ pushNotificationsEnabled: value });
+      updateUser({ ...user!, pushNotificationsEnabled: value });
+    } catch (error) {
+      console.error("Failed to toggle notifications:", error);
+      setNotificationsEnabled(!value); // Revert UI
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to update notification settings",
+      });
+    }
   };
 
   const SettingItem = ({
@@ -203,7 +248,9 @@ export default function SettingsScreen() {
               />
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{user?.fullname ?? 'User'}</Text>
+              <Text style={styles.profileName}>
+                {user?.firstName} {user?.lastName}
+              </Text>
               <Text style={styles.profileEmail}>{user?.email ?? ''}</Text>
             </View>
             <View style={styles.profileArrow}>
@@ -223,7 +270,7 @@ export default function SettingsScreen() {
             label="Push Notifications"
             isToggle={true}
             toggleValue={notificationsEnabled}
-            onPress={() => setNotificationsEnabled(!notificationsEnabled)}
+            onPress={handleToggleNotifications}
           />
         </View>
 
@@ -233,17 +280,17 @@ export default function SettingsScreen() {
           <SettingItem
             iconName="document-text-outline"
             label="Terms & Conditions"
-            onPress={() => openExternal("https://example.com/terms")}
+            onPress={() => openExternal("https://herutility.co.uk/terms-and-conditions/")}
           />
           <SettingItem
             iconName="shield-checkmark-outline"
             label="Privacy Policy"
-            onPress={() => openExternal("https://example.com/privacy")}
+            onPress={() => openExternal("https://herutility.co.uk/privacy-policy/")}
           />
           <SettingItem
             iconName="help-circle-outline"
             label="FAQs"
-            onPress={() => openExternal("https://example.com/faqs")}
+            onPress={() => openExternal("https://herutility.co.uk/complaint/")}
           />
         </View>
 
@@ -253,18 +300,18 @@ export default function SettingsScreen() {
           <SettingItem
             iconName="mail-outline"
             label="Email Support"
-            value="support@utilitypilot.com"
+            value="hello@herutility.co.uk"
             bgColor="#d1fae5"
             color="#059669"
-            onPress={() => Linking.openURL("mailto:support@utilitypilot.com")}
+            onPress={() => Linking.openURL("mailto:hello@herutility.co.uk")}
           />
           <SettingItem
             iconName="call-outline"
             label="Call Support"
-            value="+44 20 7123 4567"
+            value="0800 368 8038"
             bgColor="#d1fae5"
             color="#059669"
-            onPress={() => Linking.openURL("tel:+442071234567")}
+            onPress={() => Linking.openURL("tel:08003688038")}
           />
         </View>
 
@@ -285,18 +332,36 @@ export default function SettingsScreen() {
       {/* Edit Profile Modal */}
       <EditProfileModal
         bottomSheetRef={editProfileSheetRef}
-        user={{ name: user?.fullname ?? '', email: user?.email ?? '' }}
-        onSave={async (newData: { name: string; email: string }) => {
+        user={{
+          firstName: user?.firstName ?? "",
+          lastName: user?.lastName ?? "",
+          email: user?.email ?? "",
+        }}
+        onSave={async (newData: {
+          firstName: string;
+          lastName: string;
+          email: string;
+        }) => {
           try {
-            await updateUserMutation.mutateAsync({ fullname: newData.name, email: newData.email });
+            await updateUserMutation.mutateAsync({
+              firstName: newData.firstName,
+              lastName: newData.lastName,
+              email: newData.email,
+            });
             updateUser({
               ...user!,
-              fullname: newData.name,
+              firstName: newData.firstName,
+              lastName: newData.lastName,
+              fullname: `${newData.firstName} ${newData.lastName}`,
               email: newData.email,
             });
             editProfileSheetRef.current?.close();
           } catch (err: any) {
-            Alert.alert('Error', err?.message || 'Failed to update profile');
+            Toast.show({
+              type: "error",
+              text1: "Error",
+              text2: err?.message || "Failed to update profile",
+            });
           }
         }}
         renderBackdrop={renderBackdrop}
@@ -318,7 +383,8 @@ const EditProfileModal = ({
   onSave,
   renderBackdrop,
 }: any) => {
-  const [name, setName] = useState(user.name);
+  const [firstName, setFirstName] = useState(user.firstName);
+  const [lastName, setLastName] = useState(user.lastName);
   const [email, setEmail] = useState(user.email);
 
   return (
@@ -346,13 +412,28 @@ const EditProfileModal = ({
 
         <View style={styles.sheetBody}>
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Full Name</Text>
+            <Text style={styles.inputLabel}>First Name</Text>
+              <BottomSheetTextInput
+              style={styles.textInput}
+              value={firstName}
+              onChangeText={setFirstName}
+              placeholder="Enter your first name"
+              placeholderTextColor="#94a3b8"
+              autoComplete="name-given"
+              textContentType="givenName"
+            />
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Last Name</Text>
             <BottomSheetTextInput
               style={styles.textInput}
-              value={name}
-              onChangeText={setName}
-              placeholder="Enter your full name"
+              value={lastName}
+              onChangeText={setLastName}
+              placeholder="Enter your last name"
               placeholderTextColor="#94a3b8"
+              autoComplete="name-family"
+              textContentType="familyName"
             />
           </View>
 
@@ -366,12 +447,14 @@ const EditProfileModal = ({
               placeholderTextColor="#94a3b8"
               keyboardType="email-address"
               autoCapitalize="none"
+              autoComplete="email"
+              textContentType="emailAddress"
             />
           </View>
 
           <TouchableOpacity
             style={styles.saveButton}
-            onPress={() => onSave({ name, email })}
+            onPress={() => onSave({ firstName, lastName, email })}
           >
             <Text style={styles.saveButtonText}>Save Changes</Text>
           </TouchableOpacity>

@@ -220,6 +220,13 @@ export const api = {
 
   delete: <T>(endpoint: string, options?: Omit<FetchOptions, "method" | "body">) =>
     request<T>(endpoint, { ...options, method: "DELETE" }),
+
+  // Auth Specific
+  registerPushToken: (token: string) =>
+    request("/api/auth/push-token", { method: "POST", body: { token } }),
+
+  unregisterPushToken: (token: string) =>
+    request("/api/auth/push-token", { method: "DELETE", body: { token } }),
 };
 
 export default api;

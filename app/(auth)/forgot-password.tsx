@@ -5,16 +5,16 @@ import { useRouter } from 'expo-router';
 import { ArrowLeft, Mail } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -30,7 +30,11 @@ export default function ForgotPasswordScreen() {
         params: { email: email.trim().toLowerCase() },
       });
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to send verification code');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error?.message || 'Failed to send verification code',
+      });
     }
   };
 
@@ -79,6 +83,8 @@ export default function ForgotPasswordScreen() {
                 placeholder="Email Address"
                 value={email}
                 onChangeText={setEmail}
+                autoComplete="email"
+                textContentType="emailAddress"
               />
 
               <Pressable

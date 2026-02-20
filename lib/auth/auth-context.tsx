@@ -34,21 +34,27 @@ import {
 
 export interface AuthUser {
   id: string;
+  firstName: string;
+  lastName: string;
   fullname: string;
   email: string;
   role: string;
   profilePicture?: string;
   expoPushTokens?: string[];
+  pushNotificationsEnabled: boolean;
 }
 
 interface LoginResponse {
   user: {
     id: string;
+    firstName: string;
+    lastName: string;
     fullname: string;
     email: string;
     role: string;
     profilePicture?: string;
     expoPushTokens?: string[];
+    pushNotificationsEnabled: boolean;
   };
   token: string;
   refreshToken: string;
@@ -67,7 +73,8 @@ interface AuthState {
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (
-    fullname: string,
+    firstName: string,
+    lastName: string,
     email: string,
     password: string
   ) => Promise<void>;
@@ -201,18 +208,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         { skipAuth: true }
       );
 
+
       if (!response.success || !response.data) {
+      console.log(response);
         throw new Error(response.message || "Login failed");
       }
 
       const { user, token, refreshToken } = response.data;
       const authUser: AuthUser = {
         id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
         fullname: user.fullname,
         email: user.email,
         role: user.role,
         profilePicture: user.profilePicture,
         expoPushTokens: user.expoPushTokens,
+        pushNotificationsEnabled: user.pushNotificationsEnabled,
       };
 
       await saveTokens(token, refreshToken);
@@ -228,10 +240,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const register = useCallback(
-    async (fullname: string, email: string, password: string) => {
+    async (firstName: string, lastName: string, email: string, password: string) => {
       const response = await api.post<ApiResponse<LoginResponse>>(
         "/api/auth/register",
-        { fullname, email, password },
+        { firstName, lastName, email, password },
         { skipAuth: true }
       );
 
@@ -242,11 +254,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { user, token, refreshToken } = response.data;
       const authUser: AuthUser = {
         id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
         fullname: user.fullname,
         email: user.email,
         role: user.role,
         profilePicture: user.profilePicture,
         expoPushTokens: user.expoPushTokens,
+        pushNotificationsEnabled: user.pushNotificationsEnabled,
       };
 
       await saveTokens(token, refreshToken);

@@ -35,9 +35,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             });
 
             if (!isFocused && !event.defaultPrevented) {
-              router.push(
-                (route.name === "index" ? "/" : `/${route.name}`) as any,
-              );
+              navigation.navigate(route.name, route.params);
             }
           };
 
@@ -50,7 +48,9 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               onPress={onPress}
               style={[styles.tabButton, isFocused && styles.tabButtonActive]}
             >
-              <IconComponent size={24} color={color} strokeWidth={2.5} />
+              <View pointerEvents="none">
+                <IconComponent size={24} color={color} strokeWidth={2.5} />
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -67,6 +67,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 25,
     alignSelf: "center",
+    // zIndex: 100,
+    // elevation: 10,
   },
   tabBar: {
     backgroundColor: "#000000",

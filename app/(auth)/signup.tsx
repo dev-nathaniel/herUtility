@@ -2,11 +2,10 @@ import { AuthInput, BrandHeader } from '@/components/auth';
 import { useAuth } from '@/lib/auth/auth-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Building, Lock, Mail, User } from 'lucide-react-native';
+import { CheckSquare, Lock, Mail, Square, User } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -15,27 +14,64 @@ import {
     Text,
     View,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 
 export default function SignUpScreen() {
   const router = useRouter();
   const { register } = useAuth();
-  const [fullName, setFullName] = useState('');
-  const [company, setCompany] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    acceptTerms: false,
+  });
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignUp = async () => {
-    if (!fullName || !email || !password) {
-      Alert.alert('Error', 'Please fill in all required fields');
+    if (
+      !form.firstName ||
+      !form.lastName ||
+      !form.email ||
+      !form.password ||
+      !form.confirmPassword
+    ) {
+      Toast.show({
+        type: "error",
+        text1: "Missing Fields",
+        text2: "Please fill in all fields",
+      });
+      return;
+    }
+
+    if (form.password !== form.confirmPassword) {
+      Toast.show({
+        type: "error",
+        text1: "Password Mismatch",
+        text2: "Passwords do not match",
+      });
+      return;
+    }
+
+    if (!form.acceptTerms) {
+      Toast.show({
+        type: "error",
+        text1: "Terms Required",
+        text2: "Please accept the terms and conditions",
+      });
       return;
     }
     setIsLoading(true);
     try {
-      await register(fullName, email.trim().toLowerCase(), password);
+      await register(form.firstName, form.lastName, form.email.trim().toLowerCase(), form.password);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Registration Failed', error?.message || 'Could not create account');
+      Toast.show({
+        type: 'error',
+        text1: 'Registration Failed',
+        text2: error?.message || 'Could not create account',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -81,30 +117,69 @@ export default function SignUpScreen() {
             <View style={styles.form}>
               <AuthInput
                 icon={User}
-                placeholder="Full Name"
-                value={fullName}
-                onChangeText={setFullName}
+                placeholder="First Name"
+                value={form.firstName}
+                onChangeText={(text) => setForm({ ...form, firstName: text })}
+                autoComplete="name-given"
+                textContentType="givenName"
               />
               <AuthInput
+                icon={User}
+                placeholder="Last Name"
+                value={form.lastName}
+                onChangeText={(text) => setForm({ ...form, lastName: text })}
+                autoComplete="name-family"
+                textContentType="familyName"
+              />
+              {/* <AuthInput
                 icon={Building}
                 placeholder="Company Name"
                 value={company}
                 onChangeText={setCompany}
-              />
+              /> */}
               <AuthInput
                 icon={Mail}
                 type="email"
                 placeholder="Email Address"
-                value={email}
-                onChangeText={setEmail}
+                value={form.email}
+                onChangeText={(text) => setForm({ ...form, email: text })}
+                autoComplete="email"
+                textContentType="emailAddress"
               />
               <AuthInput
                 icon={Lock}
                 type="password"
                 placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
+                value={form.password}
+                onChangeText={(text) => setForm({ ...form, password: text })}
+                autoComplete="password-new"
+                textContentType="newPassword"
               />
+              <AuthInput
+                icon={Lock}
+                type="password"
+                placeholder="Confirm Password"
+                value={form.confirmPassword}
+                onChangeText={(text) => setForm({ ...form, confirmPassword: text })}
+                autoComplete="password-new"
+                textContentType="newPassword"
+              />
+
+              <Pressable
+                style={styles.termsContainer}
+                onPress={() => setForm({ ...form, acceptTerms: !form.acceptTerms })}
+              >
+                <View style={[styles.checkbox, form.acceptTerms && styles.checkboxChecked]}>
+                  {form.acceptTerms ? (
+                    <CheckSquare size={18} color="#fff" />
+                  ) : (
+                    <Square size={18} color="#94a3b8" />
+                  )}
+                </View>
+                <Text style={styles.termsText}>
+                  I agree to the <Text style={styles.termsLink}>Terms of Service</Text> and <Text style={styles.termsLink}>Privacy Policy</Text>
+                </Text>
+              </Pressable>
 
               <Pressable
                 style={({ pressed }) => [
@@ -240,5 +315,36 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#4f46e5',
+  },
+  termsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingHorizontal: 4,
+  },
+  checkbox: {
+    marginRight: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#4f46e5',
+    borderColor: '#4f46e5',
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#64748b',
+    lineHeight: 20,
+  },
+  termsLink: {
+    color: '#4f46e5',
+    fontWeight: '600',
   },
 });

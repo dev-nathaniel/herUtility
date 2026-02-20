@@ -16,19 +16,25 @@ import { useAppMutation, useAppQuery, useOptimisticMutation } from "../queries";
 
 export interface User {
   _id: string;
+  firstName: string;
+  lastName: string;
   fullname: string;
   email: string;
   role: string;
   profilePicture?: string;
   expoPushTokens?: string[];
+  pushNotificationsEnabled: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface UpdateUserInput {
+  firstName?: string;
+  lastName?: string;
   fullname?: string;
   email?: string;
   expoPushToken?: string;
+  pushNotificationsEnabled?: boolean;
 }
 
 // ============================================================================

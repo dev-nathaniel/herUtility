@@ -6,7 +6,6 @@ import { ArrowLeft, Lock } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -15,6 +14,7 @@ import {
     Text,
     View,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 
 export default function NewPasswordScreen() {
   const router = useRouter();
@@ -38,7 +38,11 @@ export default function NewPasswordScreen() {
       await resetPassword.mutateAsync({ email, newPassword });
       router.replace('/(auth)/password-success');
     } catch (err: any) {
-      Alert.alert('Error', err?.message || 'Failed to reset password');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: err?.message || 'Failed to reset password',
+      });
     }
   };
 
@@ -92,6 +96,8 @@ export default function NewPasswordScreen() {
                   setNewPassword(text);
                   setError('');
                 }}
+                autoComplete="password-new"
+                textContentType="newPassword"
               />
               <AuthInput
                 icon={Lock}
@@ -102,6 +108,8 @@ export default function NewPasswordScreen() {
                   setConfirmPassword(text);
                   setError('');
                 }}
+                autoComplete="password-new"
+                textContentType="newPassword"
               />
 
               {error ? (

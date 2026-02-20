@@ -6,7 +6,7 @@
  */
 
 import { router } from "expo-router";
-import { Alert } from "react-native";
+import Toast from "react-native-toast-message";
 
 import { ErrorCodes } from "@/lib/api/types";
 import { isApiError } from "./retry-strategy";
@@ -89,7 +89,11 @@ export function handleMutationError(error: unknown): void {
   const message = getErrorMessage(error);
 
   // Show error alert for mutations
-  Alert.alert("Error", message);
+  Toast.show({
+    type: "error",
+    text1: "Error",
+    text2: message,
+  });
 
   // Also log
   handleQueryError(error);

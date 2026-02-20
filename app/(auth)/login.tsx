@@ -6,7 +6,6 @@ import { Lock, Mail } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
     ActivityIndicator,
-    Alert,
     KeyboardAvoidingView,
     Platform,
     Pressable,
@@ -15,6 +14,7 @@ import {
     Text,
     View,
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -25,7 +25,11 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter your email and password');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Please enter your email and password',
+      });
       return;
     }
     setIsLoading(true);
@@ -33,7 +37,11 @@ export default function LoginScreen() {
       await login(email.trim().toLowerCase(), password);
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Login Failed', error?.message || 'Invalid email or password');
+      Toast.show({
+        type: 'error',
+        text1: 'Login Failed',
+        text2: error?.message || 'Invalid email or password',
+      });
     } finally {
       setIsLoading(false);
     }
@@ -83,6 +91,8 @@ export default function LoginScreen() {
                 placeholder="Email Address"
                 value={email}
                 onChangeText={setEmail}
+                autoComplete="email"
+                textContentType="emailAddress"
               />
               <AuthInput
                 icon={Lock}
@@ -90,6 +100,8 @@ export default function LoginScreen() {
                 placeholder="Password"
                 value={password}
                 onChangeText={setPassword}
+                autoComplete="password"
+                textContentType="password"
               />
 
               <Pressable style={styles.forgotPassword} onPress={() => router.push('/(auth)/forgot-password')}>

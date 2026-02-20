@@ -11,9 +11,15 @@ import { useEffect } from "react";
 import "react-native-reanimated";
 
 import { useColorScheme } from "@/components/useColorScheme";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { AuthProvider, useAuth } from "@/lib/auth/auth-context";
 import { QueryProvider } from "@/lib/query";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import Toast from "react-native-toast-message";
+
+//validate inputs
+//refresh home page
+//refresh on focus
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -54,6 +60,7 @@ export default function RootLayout() {
       <AuthProvider>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <RootLayoutNav />
+          <Toast />
         </GestureHandlerRootView>
       </AuthProvider>
     </QueryProvider>
@@ -65,6 +72,7 @@ function RootLayoutNav() {
   const { isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const { expoPushToken, notification } = usePushNotifications();
 
   useEffect(() => {
     if (isLoading) return;

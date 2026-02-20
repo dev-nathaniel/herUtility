@@ -1,6 +1,6 @@
 import { Eye, EyeOff, LucideIcon } from 'lucide-react-native';
 import React, { useRef, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, TextInputProps, View } from 'react-native';
 
 interface AuthInputProps {
   icon: LucideIcon;
@@ -8,6 +8,8 @@ interface AuthInputProps {
   placeholder: string;
   value?: string;
   onChangeText?: (text: string) => void;
+  autoComplete?: TextInputProps['autoComplete'];
+  textContentType?: TextInputProps['textContentType'];
 }
 
 export const AuthInput = ({
@@ -16,6 +18,8 @@ export const AuthInput = ({
   placeholder,
   value,
   onChangeText,
+  autoComplete,
+  textContentType,
 }: AuthInputProps) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -45,6 +49,8 @@ export const AuthInput = ({
         keyboardType={type === 'email' ? 'email-address' : 'default'}
         autoCapitalize={type === 'email' ? 'none' : 'sentences'}
         autoCorrect={false}
+        autoComplete={autoComplete}
+        textContentType={textContentType}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
       />

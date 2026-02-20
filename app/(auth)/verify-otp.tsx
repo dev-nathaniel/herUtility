@@ -5,17 +5,17 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import React, { useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View
 } from 'react-native';
+import Toast from 'react-native-toast-message';
 
 export default function VerifyOtpScreen() {
   const router = useRouter();
@@ -52,7 +52,11 @@ export default function VerifyOtpScreen() {
         params: { email },
       });
     } catch (error: any) {
-      Alert.alert('Verification Failed', error?.message || 'Invalid or expired code');
+      Toast.show({
+        type: 'error',
+        text1: 'Verification Failed',
+        text2: error?.message || 'Invalid or expired code',
+      });
     }
   };
 
@@ -61,9 +65,17 @@ export default function VerifyOtpScreen() {
     inputRefs.current[0]?.focus();
     try {
       await resendOtp.mutateAsync({ email });
-      Alert.alert('Code Sent', 'A new verification code has been sent to your email');
+      Toast.show({
+        type: 'success',
+        text1: 'Code Sent',
+        text2: 'A new verification code has been sent to your email',
+      });
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to resend code');
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: error?.message || 'Failed to resend code',
+      });
     }
   };
 
@@ -124,6 +136,8 @@ export default function VerifyOtpScreen() {
                   maxLength={1}
                   autoFocus={index === 0}
                   selectTextOnFocus
+                  textContentType="oneTimeCode"
+                  autoComplete="sms-otp"
                 />
               ))}
             </View>

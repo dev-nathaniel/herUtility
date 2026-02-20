@@ -23,6 +23,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import Toast from "react-native-toast-message";
 
 const { width } = Dimensions.get("window");
 
@@ -34,7 +35,7 @@ const businessColors = [
 
 /** Map a server utility type to the UI fuel label */
 const fuelTypeMap: Record<string, string> = {
-  electricity: "Electric",
+  electricity: "Electricity",
   gas: "Gas",
   water: "Water",
 };
@@ -59,6 +60,7 @@ function mapBusiness(apiBiz: ApiBusiness, index: number) {
     id: apiBiz._id,
     name: apiBiz.name,
     address: apiBiz.address,
+    postcode: apiBiz.postcode,
     logo: apiBiz.name.slice(0, 2).toUpperCase(),
     color: businessColors[index % businessColors.length],
   };
@@ -93,12 +95,12 @@ function mapUtility(util: ApiUtility, businessId: string) {
 // --- Utility Components ---
 const MeterIcon = ({ fuel }: { fuel: string }) => {
   const config: any = {
-    Electric: { icon: "flash", bg: "#fef3c7", text: "#d97706" },
+    Electricity: { icon: "flash", bg: "#fef3c7", text: "#d97706" },
     Gas: { icon: "flame", bg: "#dbeafe", text: "#2563eb" },
     Water: { icon: "water", bg: "#cffafe", text: "#0891b2" },
     Telecoms: { icon: "call", bg: "#f3e8ff", text: "#9333ea" },
   };
-  const { icon, bg, text } = config[fuel] || config.Electric;
+  const { icon, bg, text } = config[fuel] || config.Electricity;
 
   return (
     <View style={[styles.iconContainer, { backgroundColor: bg }]}>
@@ -236,7 +238,7 @@ const BusinessCard = ({
             <View style={styles.businessAddress}>
               <MaterialIcons name="business" size={10} color="#cbd5e1" />
               <Text style={styles.businessAddressText} numberOfLines={1}>
-                {business.address}
+                {business.postcode || business.address}
               </Text>
             </View>
           </View>
@@ -638,36 +640,56 @@ const ContractDetailsSheet = ({ bottomSheetRef, contract, business }: any) => {
 };
 
 const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusinessId, onDismiss }: any) => {
-  const [step, setStep] = useState(1); // 1: Business, 2: Fuel/Supplier, 3: Contract Expiry
+  const { user } = useAuth();
+  const [step, setStep] = useState(1); // 1: Business, 2: Postcode (Existing only), 3: Fuel/Supplier, 4: Contract, 5: Email
   const [formType, setFormType] = useState("newBusiness");
-  const [selectedBusinessId, setSelectedBusinessId] = useState("");
+  const [selectedBusinessIds, setSelectedBusinessIds] = useState<string[]>([]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [postcodes, setPostcodes] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Effect to handle initialBusinessId when sheet opens
   React.useEffect(() => {
-    if (initialBusinessId) {
-      setSelectedBusinessId(initialBusinessId);
+    if (initialBusinessId && businesses.length > 0) {
+      const biz = businesses.find((b:any) => b.id === initialBusinessId);
+      if (biz) {
+         setPostcodes(prev => ({
+            ...prev,
+            [initialBusinessId]: biz.postcode || biz.address || ""
+         }));
+      }
+      setSelectedBusinessIds([initialBusinessId]);
       setFormType("existing");
+      // If we pre-select, we might skip to step 2 or 3 depending on flow.
+      // But user likely wants to confirm details. Let's go to step 2 (postcode)
       setStep(2);
     } 
-  }, [initialBusinessId]);
+  }, [initialBusinessId, businesses]);
 
   const [formData, setFormData] = useState({
     businessName: "",
+    address: "",
     postcode: "",
-    meterId: "",
-    fuelType: "Electric",
-    supplier: "",
-    expiryWindow: "", // 'unknown', 'no_contract', 'under_6', '6_to_12', 'over_12'
+    email: user?.email || "",
   });
+
+  const [selectedFuels, setSelectedFuels] = useState<string[]>([]);
+  const [fuelDetails, setFuelDetails] = useState<Record<string, { supplier: string; expiryWindow: string; meterId: string }>>({});
+
+  // Update email if user changes (e.g. initial load)
+  React.useEffect(() => {
+    if (user?.email && !formData.email) {
+      setFormData(prev => ({ ...prev, email: user.email }));
+    }
+  }, [user?.email]);
 
   const suppliers = [
     "British Gas",
-    "E.ON",
-    "npower",
+    "E.On",
+    "nPower",
     "Scottish Power",
     "Opus Energy",
-    "Other",
+    "I don't know",
   ];
 
   const expiryOptions = [
@@ -692,20 +714,45 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
 
   const handleNext = () => {
     if (step === 1) {
-      // Basic validation for step 1
       if (
         formType === "newBusiness" &&
-        (!formData.businessName || !formData.postcode)
+        (!formData.businessName || (!formData.address && !formData.postcode))
       )
         return;
-      if (formType === "existing" && !selectedBusinessId) return;
-      setStep(2);
+      if (formType === "existing" && selectedBusinessIds.length === 0) return;
+
+      if (formType === "newBusiness") {
+        setStep(3);
+      } else {
+        setPostcodes(prev => {
+           const next = { ...prev };
+           selectedBusinessIds.forEach(id => {
+             if (next[id] === undefined) {
+                const biz = businesses.find((b: any) => b.id === id);
+                if (biz) {
+                    next[id] = biz.postcode || biz.address || "";
+                } else {
+                    next[id] = "";
+                }
+             }
+           });
+           return next;
+        });
+        setStep(2);
+      }
     } else if (step === 2) {
-      // Validation for step 2
-      if (!formData.supplier) return;
+      if (!isStep2Valid) return;
       setStep(3);
+    } else if (step === 3) {
+      if (selectedFuels.length === 0) return;
+      setStep(4);
+    } else if (step >= 4 && step < 4 + selectedFuels.length) {
+      const fuelIndex = step - 4;
+      const fuel = selectedFuels[fuelIndex];
+      const details = fuelDetails[fuel] || {};
+      if (!details.supplier || !details.expiryWindow) return;
+      setStep(step + 1);
     } else {
-      // Step 3 - submit
       handleSubmit();
     }
   };
@@ -735,44 +782,73 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
     }
   };
 
-  const handleSubmit = () => {
-    const newBusinessId =
-      formType === "newBusiness" ? `B${Date.now()}` : selectedBusinessId;
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    try {
+      if (formType === "newBusiness") {
+        const newBusinessId = `B${Date.now()}`;
+        const newBusiness = {
+          id: newBusinessId,
+          name: formData.businessName,
+          address: formData.address || "",
+          postcode: formData.postcode,
+          logo: formData.businessName.slice(0, 2).toUpperCase(),
+          color: "#6366f1",
+        };
 
-    const newBusiness =
-      formType === "newBusiness"
-        ? {
-            id: newBusinessId,
-            name: formData.businessName,
-            address: "New Location",
-            postcode: formData.postcode,
-            logo: formData.businessName.slice(0, 2).toUpperCase(),
-            color: "#6366f1",
-          }
-        : null;
+        const newContracts = selectedFuels.map(fuel => {
+           const fd = fuelDetails[fuel] || {};
+           return {
+             meterId: fd.meterId || "",
+             businessId: newBusinessId,
+             fuel: fuel,
+             end: fd.expiryWindow || "",
+             status: "pending",
+             rate: "TBD",
+             usage: "TBD",
+             cost: 0,
+             supplier: fd.supplier || "",
+             email: formData.email,
+             postcode: formData.postcode,
+           };
+        });
 
-    const calculatedEnd = calculateEndDate(formData.expiryWindow);
-    // Determine status based on window
-    const status =
-      formData.expiryWindow === "no_contract" ||
-      formData.expiryWindow === "under_6"
-        ? "Expiring"
-        : "Active";
+        await onSubmit({ newBusiness, newContracts });
+      } else {
+        // Existing businesses - create contracts for each selected business x each selected fuel
+        const existingContracts: any[] = [];
+        selectedBusinessIds.forEach(bizId => {
+           selectedFuels.forEach(fuel => {
+              const fd = fuelDetails[fuel] || {};
+              existingContracts.push({
+                 meterId: fd.meterId || "",
+                 businessId: bizId,
+                 fuel: fuel,
+                 end: fd.expiryWindow || "",
+                 status: "pending",
+                 rate: "TBD",
+                 usage: "TBD",
+                 cost: 0,
+                 supplier: fd.supplier || "",
+                 email: formData.email,
+                 postcode: postcodes[bizId],
+              });
+           });
+        });
 
-    const newContract = {
-      meterId: formData.meterId,
-      businessId: newBusinessId,
-      fuel: formData.fuelType,
-      end: formData.expiryWindow,
-      status: "pending",
-      rate: "TBD",
-      usage: "TBD",
-      cost: 0,
-      supplier: formData.supplier,
-    };
-
-    onSubmit(newBusiness, newContract);
-    handleClose();
+        await onSubmit({ existingContracts });
+      }
+      
+      handleClose();
+    } catch (error: any) {
+      Toast.show({
+        type: "error",
+        text1: "Submission Failed",
+        text2: error?.message || "Something went wrong. Please try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {
@@ -781,70 +857,81 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
     setTimeout(() => {
       setStep(1);
       setFormType("newBusiness");
-      setSelectedBusinessId("");
+      setSelectedBusinessIds([]);
+      setPostcodes({});
       setIsDropdownOpen(false);
       setFormData({
         businessName: "",
+        address: "",
         postcode: "",
-        meterId: "",
-        fuelType: "Electric",
-        supplier: "",
-        expiryWindow: "",
+        email: user?.email || "",
       });
+      setSelectedFuels([]);
+      setFuelDetails({});
     }, 300);
   };
 
   const handleBack = () => {
-    if (step === 3) {
-      setStep(2);
-    } else if (step === 2) {
-      setStep(1);
+    if (step === 3 && formType === "newBusiness") {
+      setStep(1); // Skip postcode step for new business
+    } else if (step > 1) {
+      if (initialBusinessId && step === 2) return;
+      setStep(step - 1);
     }
   };
 
-  const getSelectedBusinessName = () => {
-    const business = businesses.find((b: any) => b.id === selectedBusinessId);
-    return business?.name || "";
+  const getSelectedBusinessLabel = () => {
+    if (selectedBusinessIds.length === 0) return "Select Business";
+    if (selectedBusinessIds.length === 1) {
+      const b = businesses.find((b: any) => b.id === selectedBusinessIds[0]);
+      return b?.name || "Select Business";
+    }
+    return `${selectedBusinessIds.length} Businesses Selected`;
   };
 
   const isStep1Valid =
     formType === "newBusiness"
       ? formData.businessName && isValidUKPostcode(formData.postcode)
-      : selectedBusinessId;
+      : selectedBusinessIds.length > 0;
 
-  const isStep2Valid = formData.supplier;
+  const isStep2Valid =
+    step === 2 &&
+    selectedBusinessIds.every(
+      (id) => postcodes[id] && isValidUKPostcode(postcodes[id]),
+    );
 
-  const isStep3Valid = formData.expiryWindow;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   const getStepTitle = () => {
-    switch (step) {
-      case 1:
-        return "Business Details";
-      case 2:
-        return "Service Details";
-      case 3:
-        return "Contract Information";
-      default:
-        return "Add Utility";
+    if (step === 1) return "Business Details";
+    if (step === 2) return "Supply Address";
+    if (step === 3) return "Select Utilities";
+    if (step >= 4 && step < 4 + selectedFuels.length) {
+       const fuel = selectedFuels[step - 4];
+       return `${fuel} Details`;
     }
+    if (step === 4 + selectedFuels.length) return "Confirm Email";
+    return "Add Utility";
   };
 
   const getButtonText = () => {
-    if (step === 3) return "Get Quote";
+    if (step === 4 + selectedFuels.length) return "Get Quote";
     return "Next";
   };
 
   const isCurrentStepValid = () => {
-    switch (step) {
-      case 1:
-        return isStep1Valid;
-      case 2:
-        return isStep2Valid;
-      case 3:
-        return isStep3Valid;
-      default:
-        return false;
+    if (step === 1) return isStep1Valid;
+    if (step === 2) return isStep2Valid;
+    if (step === 3) return selectedFuels.length > 0;
+    if (step >= 4 && step < 4 + selectedFuels.length) {
+       const fuel = selectedFuels[step - 4];
+       const details = fuelDetails[fuel] || {};
+       return !!details.supplier && !!details.expiryWindow;
     }
+    if (step === 4 + selectedFuels.length) {
+       return formData.email && emailRegex.test(formData.email);
+    }
+    return false;
   };
 
   return (
@@ -862,7 +949,7 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
     >
       <BottomSheetView>
         <View style={styles.sheetHeader}>
-          {step > 1 && (
+          {step > 1 && !(initialBusinessId && step === 2) && (
             <TouchableOpacity style={styles.backButton} onPress={handleBack}>
               <Ionicons name="arrow-back" size={20} color="#64748b" />
             </TouchableOpacity>
@@ -904,7 +991,7 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
                   ]}
                   onPress={() => {
                     setFormType("newBusiness");
-                    setSelectedBusinessId("");
+                    setSelectedBusinessIds([]);
                   }}
                 >
                   <Text
@@ -948,7 +1035,7 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
                       }
                     />
                   </View>
-                    <View style={styles.inputGroup}>
+                  <View style={styles.inputGroup}>
                       <Text style={styles.inputLabel}>POSTCODE</Text>
                       <BottomSheetTextInput
                         style={[
@@ -980,12 +1067,10 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
                     <Text
                       style={[
                         styles.dropdownText,
-                        !selectedBusinessId && styles.dropdownPlaceholder,
+                        selectedBusinessIds.length === 0 && styles.dropdownPlaceholder,
                       ]}
                     >
-                      {selectedBusinessId
-                        ? getSelectedBusinessName()
-                        : "Select Business"}
+                      {getSelectedBusinessLabel()}
                     </Text>
                     <Ionicons
                       name={isDropdownOpen ? "chevron-up" : "chevron-down"}
@@ -995,17 +1080,22 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
                   </TouchableOpacity>
                   {isDropdownOpen && (
                     <View style={styles.dropdownList}>
-                      {businesses.map((b: any) => (
+                      {businesses.map((b: any) => {
+                         const isSelected = selectedBusinessIds.includes(b.id);
+                         return (
                         <TouchableOpacity
                           key={b.id}
                           style={[
                             styles.dropdownItem,
-                            selectedBusinessId === b.id &&
+                            isSelected &&
                               styles.dropdownItemActive,
                           ]}
                           onPress={() => {
-                            setSelectedBusinessId(b.id);
-                            setIsDropdownOpen(false);
+                            if (isSelected) {
+                              setSelectedBusinessIds(ids => ids.filter(id => id !== b.id));
+                            } else {
+                              setSelectedBusinessIds(ids => [...ids, b.id]);
+                            }
                           }}
                         >
                           <View
@@ -1021,13 +1111,13 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
                           <Text
                             style={[
                               styles.dropdownItemText,
-                              selectedBusinessId === b.id &&
+                              isSelected &&
                                 styles.dropdownItemTextActive,
                             ]}
                           >
                             {b.name}
                           </Text>
-                          {selectedBusinessId === b.id && (
+                          {isSelected && (
                             <Ionicons
                               name="checkmark"
                               size={18}
@@ -1035,58 +1125,115 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
                             />
                           )}
                         </TouchableOpacity>
-                      ))}
+                      )})}
                     </View>
                   )}
                 </View>
               )}
             </View>
           )}
-
-          {/* STEP 2: FUEL TYPE & SUPPLIER */}
+          
+          {/* STEP 2: POSTCODE (Existing Business Only) */}
           {step === 2 && (
+             <View>
+               <Text style={[styles.inputLabel, { marginBottom: 16 }]}>
+                 {selectedBusinessIds.length > 1 
+                   ? "ARE THESE THE SUPPLY ADDRESSES?" 
+                   : "IS THIS THE SUPPLY ADDRESS?"}
+               </Text>
+               
+               {selectedBusinessIds.map(bizId => {
+                 const biz = businesses.find((b: any) => b.id === bizId);
+                 return (
+                   <View key={bizId} style={[styles.inputGroup, { marginBottom: 12 }]}>
+                     <Text style={[styles.inputLabel, { fontSize: 10, marginBottom: 4 }]}>{biz?.name?.toUpperCase()}</Text>
+                     <BottomSheetTextInput
+                       style={styles.input}
+                       placeholder="Enter Postcode"
+                       placeholderTextColor="#94a3b8"
+                       value={postcodes[bizId] || ""}
+                       onChangeText={(text) => {
+                         setPostcodes(prev => ({ ...prev, [bizId]: text.toUpperCase() }));
+                       }}
+                       autoCapitalize="characters"
+                     />
+                   </View>
+                 )
+               })}
+             </View>
+          )}
+
+          {/* STEP 3: FUEL SELECTION */}
+          {step === 3 && (
             <View>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>FUEL TYPE</Text>
+                <Text style={styles.inputLabel}>SELECT UTILITIES</Text>
                 <View style={styles.fuelTypeGrid}>
-                  {["Electric", "Gas", "Water", "Telecoms"].map((f) => (
+                  {["Electricity", "Gas", "Water", "Telecoms"].map((f) => {
+                    const isSelected = selectedFuels.includes(f);
+                    return (
                     <TouchableOpacity
                       key={f}
                       style={[
                         styles.fuelButton,
-                        formData.fuelType === f && styles.fuelButtonActive,
+                        isSelected && styles.fuelButtonActive,
                       ]}
-                      onPress={() => setFormData({ ...formData, fuelType: f })}
+                      onPress={() => {
+                        if (isSelected) {
+                          setSelectedFuels(selectedFuels.filter(fuel => fuel !== f));
+                        } else {
+                          setSelectedFuels([...selectedFuels, f]);
+                        }
+                      }}
                     >
                       <Text
                         style={[
                           styles.fuelText,
-                          formData.fuelType === f && styles.fuelTextActive,
+                          isSelected && styles.fuelTextActive,
                         ]}
                       >
                         {f}
                       </Text>
                     </TouchableOpacity>
-                  ))}
+                  )})}
                 </View>
               </View>
+            </View>
+          )}
 
+          {/* DYNAMIC STEPS: FOR EACH SELECTED FUEL */}
+          {step >= 4 && step < 4 + selectedFuels.length && (() => {
+             const fuel = selectedFuels[step - 4];
+             const details = fuelDetails[fuel] || { supplier: "", expiryWindow: "", meterId: "" };
+             
+             const updateDetails = (key: string, value: string) => {
+                setFuelDetails(prev => ({
+                   ...prev,
+                   [fuel]: {
+                      ...(prev[fuel] || { supplier: "", expiryWindow: "", meterId: "" }),
+                      [key]: value
+                   }
+                }));
+             };
+
+             return (
+            <View>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>CURRENT SUPPLIER</Text>
+                <Text style={styles.inputLabel}>CURRENT {fuel.toUpperCase()} SUPPLIER</Text>
                 <View style={styles.optionsGrid}>
                   {suppliers.map((s) => (
                     <TouchableOpacity
                       key={s}
                       style={[
                         styles.optionButton,
-                        formData.supplier === s && styles.optionButtonActive,
+                        details.supplier === s && styles.optionButtonActive,
                       ]}
-                      onPress={() => setFormData({ ...formData, supplier: s })}
+                      onPress={() => updateDetails("supplier", s)}
                     >
                       <Text
                         style={[
                           styles.optionText,
-                          formData.supplier === s && styles.optionTextActive,
+                          details.supplier === s && styles.optionTextActive,
                         ]}
                       >
                         {s}
@@ -1095,12 +1242,6 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
                   ))}
                 </View>
               </View>
-            </View>
-          )}
-
-          {/* STEP 3: CONTRACT EXPIRY & METER ID */}
-          {step === 3 && (
-            <View>
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>CONTRACT EXPIRY</Text>
                 <View style={styles.expiryList}>
@@ -1109,23 +1250,21 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
                       key={opt.value}
                       style={[
                         styles.expiryOption,
-                        formData.expiryWindow === opt.value &&
+                        details.expiryWindow === opt.value &&
                           styles.expiryOptionActive,
                       ]}
-                      onPress={() =>
-                        setFormData({ ...formData, expiryWindow: opt.value })
-                      }
+                      onPress={() => updateDetails("expiryWindow", opt.value)}
                     >
                       <Text
                         style={[
                           styles.expiryOptionText,
-                          formData.expiryWindow === opt.value &&
+                          details.expiryWindow === opt.value &&
                             styles.expiryOptionTextActive,
                         ]}
                       >
                         {opt.label}
                       </Text>
-                      {formData.expiryWindow === opt.value && (
+                      {details.expiryWindow === opt.value && (
                         <Ionicons
                           name="checkmark-circle"
                           size={18}
@@ -1143,11 +1282,34 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
                   style={styles.input}
                   placeholder="e.g. S1234567"
                   placeholderTextColor="#94a3b8"
-                  value={formData.meterId}
-                  onChangeText={(text: string) =>
-                    setFormData({ ...formData, meterId: text })
-                  }
+                  value={details.meterId}
+                  onChangeText={(text: string) => updateDetails("meterId", text)}
                 />
+              </View>
+            </View>
+          );})()}
+
+          {/* FINAL STEP: EMAIL CONFIRMATION */}
+          {step === 4 + selectedFuels.length && (
+            <View>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>CONFIRM EMAIL ADDRESS</Text>
+                <BottomSheetTextInput
+                  style={styles.input}
+                  placeholder="e.g. your@email.com"
+                  placeholderTextColor="#94a3b8"
+                  value={formData.email}
+                  onChangeText={(text: string) =>
+                    setFormData({ ...formData, email: text })
+                  }
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                />
+                <Text style={{ color: "#64748b", fontSize: 12, marginTop: 8 }}>
+                  We'll send your quotes to this email address.
+                </Text>
               </View>
             </View>
           )}
@@ -1156,13 +1318,17 @@ const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusiness
             <TouchableOpacity
               style={[
                 styles.submitButton,
-                !isCurrentStepValid() && styles.submitButtonDisabled,
+                (!isCurrentStepValid() || isSubmitting) && styles.submitButtonDisabled,
               ]}
               onPress={handleNext}
-              disabled={!isCurrentStepValid()}
+              disabled={!isCurrentStepValid() || isSubmitting}
             >
-              <Text style={styles.submitButtonText}>{getButtonText()}</Text>
-              {step < 3 && (
+              {isSubmitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.submitButtonText}>{getButtonText()}</Text>
+              )}
+              {step < 4 + selectedFuels.length && !isSubmitting && (
                 <Ionicons
                   name="arrow-forward"
                   size={18}
@@ -1203,6 +1369,8 @@ export default function TabOneScreen() {
     return apiBusinesses.map((b, i) => mapBusiness(b, i));
   }, [businessesQuery.data]);
 
+  console.log(businesses);
+
   // Flatten sites → utilities AND business-level utilities into flat contracts array the UI expects
   const contracts = useMemo(() => {
     const result: ReturnType<typeof mapUtility>[] = [];
@@ -1236,7 +1404,7 @@ export default function TabOneScreen() {
         }
       }
     }
-    console.log(result);
+    // console.log(result);
     return result;
   }, [sitesQuery.data, businessesQuery.data]);
 
@@ -1256,7 +1424,7 @@ export default function TabOneScreen() {
 
   // Map form fuel label back to server enum value
   const fuelToServerType: Record<string, string> = {
-    Electric: "electricity",
+    Electricity: "electricity",
     Gas: "gas",
     Water: "water",
     Telecoms: "telecoms",
@@ -1264,41 +1432,48 @@ export default function TabOneScreen() {
 
   // Handle new business/utility submission from AddUtilitySheet
   const handleAddUtilitySubmit = useCallback(
-    async (newBusiness: any, newContract: any) => {
-      let businessId: string | undefined;
-
-      // If a brand-new business was created locally, persist it on server
-      if (newBusiness && user) {
-        try {
+    async ({ newBusiness, newContracts, existingContracts }: any) => {
+      // 1. Handle New Business Creation
+      if (newBusiness && user && newContracts && newContracts.length > 0) {
           const result = await createBusinessMutation.mutateAsync({
             name: newBusiness.name,
-            address: newBusiness.address || "New Location",
+            address: newBusiness.address,
+            postcode: newBusiness.postcode,
             members: [{ userId: user.id, role: "owner" as const }],
           });
-          // Extract the created business _id from the response
-          businessId = result?.data?.business?._id;
-        } catch (e) {
-          console.warn("Failed to create business on server:", e);
-        }
-      } else if (newContract?.businessId) {
-        // Existing business selected
-        businessId = newContract.businessId;
+          const businessId = result?.data?.business?._id;
+
+          if (businessId) {
+            for (const contract of newContracts) {
+               await createUtilityMutation.mutateAsync({
+                businessId,
+                type: fuelToServerType[contract.fuel],
+                // The form captures *previous* contract details, not the new one yet
+                previousSupplier: contract.supplier,
+                previousMeterId: contract.meterId !== "Pending" && contract.meterId !== "" ? contract.meterId : undefined,
+                previousContractExpiry: contract.end || undefined,
+                status: "pending",
+                email: contract.email,
+                postcode: contract.postcode,
+              });
+            }
+          }
       }
 
-      // Create the utility (contract) on the server
-      if (newContract && businessId) {
-        try {
-          await createUtilityMutation.mutateAsync({
-            businessId,
-            type: fuelToServerType[newContract.fuel],
-            // The form captures *previous* contract details, not the new one yet
-            previousSupplier: newContract.supplier,
-            previousMeterId: newContract.meterId !== "Pending" ? newContract.meterId : undefined,
-            previousContractExpiry: newContract.end || undefined,
-            status: "pending",
-          });
-        } catch (e) {
-          console.warn("Failed to create utility on server:", e);
+      // 2. Handle Existing Businesses (Multiple)
+      if (existingContracts && existingContracts.length > 0) {
+        // Run mutations sequentially to avoid MongoDB write conflicts
+        for (const contract of existingContracts) {
+            await createUtilityMutation.mutateAsync({
+              businessId: contract.businessId,
+              type: fuelToServerType[contract.fuel],
+              previousSupplier: contract.supplier,
+              previousMeterId: contract.meterId !== "Pending" && contract.meterId !== "" ? contract.meterId : undefined,
+              previousContractExpiry: contract.end || undefined,
+              status: "pending",
+              email: contract.email,
+              postcode: contract.postcode,
+            });
         }
       }
 
@@ -1306,7 +1481,7 @@ export default function TabOneScreen() {
       businessesQuery.refetch();
       sitesQuery.refetch();
     },
-    [user, createBusinessMutation, createUtilityMutation, businessesQuery, sitesQuery],
+    [user, createBusinessMutation, createUtilityMutation, businessesQuery, sitesQuery, fuelToServerType],
   );
 
   const isLoading = businessesQuery.isLoading || sitesQuery.isLoading;
@@ -1967,7 +2142,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
     alignItems: "center",
-    marginTop: 8,
+    marginTop: 0,
     flexDirection: "row",
     justifyContent: "center",
   },
@@ -2170,7 +2345,7 @@ const styles = StyleSheet.create({
   
   // Button container
   buttonContainer: {
-    marginTop: 16,
+    marginTop: 0,
     paddingBottom: 8,
   },
 
