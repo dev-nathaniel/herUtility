@@ -1,60 +1,86 @@
+import HomeIcon from "@/assets/icons/HomeIcon";
+import Plus from "@/assets/icons/Plus";
+import Scan from "@/assets/icons/Scan";
+import SiteIcon from "@/assets/icons/SiteIcon";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Tabs, usePathname, useRouter } from "expo-router";
-import { Home, PieChart, Settings, User } from "lucide-react-native";
 import React from "react";
-import { StyleSheet, TouchableOpacity, View } from "react-native";
+import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
+
+import Animated, { Easing, FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const pathname = usePathname();
   const router = useRouter();
 
   const icons: any = {
-    index: Home,
-    portfolio: PieChart,
-    settings: Settings,
-    profile: User,
+    index: HomeIcon,
+    scanner: Scan,
+    sites: SiteIcon,
   };
 
-  // Define which routes to hide
-  const hiddenRoutes = ["portfolio", "settings"];
+  // Define which routes to show in the left pill
+  const pillRoutes = ["index", "scanner", "sites"];
+
+  const currentRouteName = state.routes[state.index]?.name;
+  const isHome = currentRouteName === "index";
 
   return (
-    <View style={styles.tabBarContainer}>
-      <View style={styles.tabBar}>
+    <View style={styles.tabBarWrapper}>
+      {/* Left Navigation Pill */}
+      <View style={styles.navPill}>
         {state.routes
-          .filter((route: any) => !hiddenRoutes.includes(route.name))
-          .map((route: any, index: number) => {
-          const { options } = descriptors[route.key];
-          const isFocused = state.index === state.routes.indexOf(route);
+          .filter((route: any) => pillRoutes.includes(route.name))
+          .map((route: any) => {
+            const isFocused = state.index === state.routes.indexOf(route);
 
-          const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
+            const onPress = () => {
+              const event = navigation.emit({
+                type: "tabPress",
+                target: route.key,
+                canPreventDefault: true,
+              });
 
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name, route.params);
-            }
-          };
+              if (!isFocused && !event.defaultPrevented) {
+                navigation.navigate(route.name, route.params);
+              }
+            };
 
-          const IconComponent = icons[route.name] || Home;
-          const color = isFocused ? "#ffffff" : "#666666";
+            const IconComponent = icons[route.name];
+            const color = isFocused ? "#0f172a" : "#94a3b8";
 
-          return (
-            <TouchableOpacity
-              key={route.key}
-              onPress={onPress}
-              style={[styles.tabButton, isFocused && styles.tabButtonActive]}
-            >
-              <View pointerEvents="none">
-                <IconComponent size={24} color={color} strokeWidth={2.5} />
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+            return (
+              <TouchableOpacity
+                key={route.key}
+                onPress={onPress}
+                style={[styles.tabButton, isFocused && styles.tabButtonActive]}
+              >
+                <View pointerEvents="none">
+                  <IconComponent size={22} color={color} strokeWidth={isFocused ? 2.5 : 2} />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
       </View>
+
+      {/* Right Quick Scan Action Button */}
+      <AnimatedTouchable
+        style={[styles.quickScanButton, !isHome && styles.quickScanButtonCircular, { overflow: 'hidden' }]}
+        onPress={() => router.push({ pathname: "/(tabs)/scanner", params: { autoStart: "true" } })}
+        layout={LinearTransition.duration(300).easing(Easing.inOut(Easing.ease))}
+      >
+        {isHome ? (
+          <Animated.Text entering={FadeIn.duration(200)} exiting={FadeOut.duration(100)} style={styles.quickScanText} numberOfLines={1}>
+            Quick scan
+          </Animated.Text>
+        ) : (
+          <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(100)}>
+            <Plus width={24} height={24} color="#FFFFFF" />
+          </Animated.View>
+        )}
+      </AnimatedTouchable>
     </View>
   );
 }
@@ -63,72 +89,89 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  tabBarContainer: {
+  tabBarWrapper: {
     position: "absolute",
-    bottom: 25,
-    alignSelf: "center",
-    // zIndex: 100,
-    // elevation: 10,
+    bottom: Platform.OS === "ios" ? 32 : 24,
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  tabBar: {
-    backgroundColor: "#000000",
-    borderRadius: 30,
-    height: 60,
-    paddingHorizontal: 20,
+  navPill: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 36,
+    // height: 64,
+    // padding: 18,
     flexDirection: "row",
     alignItems: "center",
-    gap: 30,
+    gap: 8,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
   },
   tabButton: {
     alignItems: "center",
     justifyContent: "center",
-    padding: 10,
-    borderRadius: 20,
+    // width: 48,
+    // height: 48,
+    padding: 18,
+    borderRadius: 24,
   },
   tabButtonActive: {
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "#FFFFFF",
+    // shadowColor: "#0f172a",
+    // shadowOffset: { width: 0, height: 2 },
+    // shadowOpacity: 0.08,
+    // shadowRadius: 6,
+    // elevation: 2,
+  },
+  quickScanButton: {
+    backgroundColor: "#FB5D38",
+    // height: 64,
+    padding: 18,
+    borderRadius: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    // shadowColor: "#FF5A26",
+    // shadowOffset: { width: 0, height: 8 },
+    // shadowOpacity: 0.25,
+    // shadowRadius: 16,
+    // elevation: 8,
+  },
+  quickScanButtonCircular: {
+    width: 60,
+    height: 60,
+    padding: 0,
+    borderRadius: 30,
+  },
+  quickScanText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });
 
 export default function TabLayout() {
   return (
-    // <GestureHandlerRootView style={styles.container}>
     <BottomSheetModalProvider>
       <Tabs
         tabBar={(props) => <CustomTabBar {...props} />}
         screenOptions={{
           headerShown: false,
-          tabBarShowLabel: false,
         }}
       >
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: "Home",
-          }}
-        />
-        <Tabs.Screen
-          name="portfolio"
-          options={{
-            title: "Portfolio",
-            href: null,
-          }}
-        />
-        <Tabs.Screen
-          name="settings"
-          options={{
-            title: "Settings",
-            href: null,
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: "Profile",
-          }}
-        />
+        <Tabs.Screen name="index" options={{ title: "Home" }} />
+        <Tabs.Screen name="portfolio" options={{ href: null }} />
+        <Tabs.Screen name="settings" options={{ href: null }} />
+        <Tabs.Screen name="scanner" options={{ title: "Scan" }} />
+        <Tabs.Screen name="sites" options={{ title: "Sites" }} />
+        <Tabs.Screen name="profile" options={{ title: "Profile", href: null }} />
       </Tabs>
     </BottomSheetModalProvider>
-    // </GestureHandlerRootView>
   );
 }

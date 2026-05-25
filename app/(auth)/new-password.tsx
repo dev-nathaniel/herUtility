@@ -1,18 +1,16 @@
-import { AuthInput, BrandHeader } from '@/components/auth';
+import { AuthInput } from '@/components/auth';
 import { useResetPassword } from '@/hooks/api/use-auth';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ArrowLeft, Lock } from 'lucide-react-native';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 
@@ -55,18 +53,6 @@ export default function NewPasswordScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Decorative Background Elements */}
-      <View style={styles.decorativeContainer}>
-        <LinearGradient
-          colors={['rgba(196, 181, 253, 0.3)', 'rgba(196, 181, 253, 0)']}
-          style={[styles.decorativeCircle, styles.topCircle]}
-        />
-        <LinearGradient
-          colors={['rgba(165, 180, 252, 0.3)', 'rgba(165, 180, 252, 0)']}
-          style={[styles.decorativeCircle, styles.bottomCircle]}
-        />
-      </View>
-
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -76,33 +62,34 @@ export default function NewPasswordScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={styles.content}>
-            <BrandHeader />
+          {/* Title Section */}
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>New{'\n'}Password</Text>
+            <Text style={styles.subtitle}>
+              Create a new secure password.
+            </Text>
+          </View>
 
-            <View style={styles.headerText}>
-              <Text style={styles.title}>New Password</Text>
-              <Text style={styles.subtitle}>
-                Create a new secure password.
-              </Text>
-            </View>
+          {/* Form Card */}
+          <View style={styles.cardContainer}>
+            <AuthInput
+              label="New Password"
+              type="password"
+              placeholder="***************"
+              value={newPassword}
+              onChangeText={(text) => {
+                setNewPassword(text);
+                setError('');
+              }}
+              autoComplete="password-new"
+              textContentType="newPassword"
+            />
 
-            <View style={styles.form}>
+            <View style={{ marginTop: 16 }}>
               <AuthInput
-                icon={Lock}
+                label="Confirm Password"
                 type="password"
-                placeholder="New Password"
-                value={newPassword}
-                onChangeText={(text) => {
-                  setNewPassword(text);
-                  setError('');
-                }}
-                autoComplete="password-new"
-                textContentType="newPassword"
-              />
-              <AuthInput
-                icon={Lock}
-                type="password"
-                placeholder="Confirm Password"
+                placeholder="***************"
                 value={confirmPassword}
                 onChangeText={(text) => {
                   setConfirmPassword(text);
@@ -111,35 +98,37 @@ export default function NewPasswordScreen() {
                 autoComplete="password-new"
                 textContentType="newPassword"
               />
-
-              {error ? (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
-
-              <Pressable
-                style={({ pressed }) => [
-                  styles.updateButton,
-                  pressed && styles.updateButtonPressed,
-                  (!isFormValid || resetPassword.isPending) && styles.updateButtonDisabled,
-                ]}
-                onPress={handleUpdatePassword}
-                disabled={!isFormValid || resetPassword.isPending}
-              >
-                {resetPassword.isPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.updateButtonText}>Update Password</Text>
-                )}
-              </Pressable>
             </View>
 
-            <Pressable style={styles.backButton} onPress={handleBackToLogin}>
-              <ArrowLeft size={16} color="#4f46e5" />
-              <Text style={styles.backButtonText}>Back to Sign In</Text>
-            </Pressable>
+            {error ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.footer}>
+              <Pressable onPress={handleBackToLogin}>
+                <Text style={styles.footerLink}>Back to Sign In</Text>
+              </Pressable>
+            </View>
           </View>
+
+          {/* Action Button */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.signInButton,
+              pressed && styles.signInButtonPressed,
+              (!isFormValid || resetPassword.isPending) && styles.signInButtonDisabled,
+            ]}
+            onPress={handleUpdatePassword}
+            disabled={!isFormValid || resetPassword.isPending}
+          >
+            {resetPassword.isPending ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.signInButtonText}>Update Password</Text>
+            )}
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -149,63 +138,47 @@ export default function NewPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F2F4F8',
-  },
-  decorativeContainer: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'hidden',
-  },
-  decorativeCircle: {
-    position: 'absolute',
-    borderRadius: 9999,
-  },
-  topCircle: {
-    top: '-20%',
-    left: '-20%',
-    width: '100%',
-    height: '50%',
-  },
-  bottomCircle: {
-    bottom: '-20%',
-    right: '-20%',
-    width: '100%',
-    height: '50%',
+    backgroundColor: '#FFFFFF',
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    paddingBottom: 40,
   },
-  content: {
+  titleContainer: {
     paddingHorizontal: 24,
-    paddingVertical: 40,
-  },
-  headerText: {
-    alignItems: 'center',
-    marginBottom: 32,
+    paddingTop: 80,
+    paddingBottom: 32,
   },
   title: {
-    fontSize: 30,
+    fontSize: 34,
     fontWeight: '800',
-    color: '#1e293b',
-    marginBottom: 8,
+    color: '#0f172a',
+    lineHeight: 40,
+    letterSpacing: -0.5,
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
     fontWeight: '500',
     color: '#64748b',
-    textAlign: 'center',
+    lineHeight: 22,
   },
-  form: {
+  cardContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 32,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+    marginHorizontal: 24,
     marginBottom: 24,
   },
   errorContainer: {
     backgroundColor: '#fef2f2',
     borderRadius: 12,
     padding: 12,
-    marginBottom: 16,
+    marginTop: 16,
     borderWidth: 1,
     borderColor: '#fecaca',
   },
@@ -215,40 +188,40 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     textAlign: 'center',
   },
-  updateButton: {
-    backgroundColor: '#0f172a',
-    paddingVertical: 18,
-    borderRadius: 16,
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#cbd5e1',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.6,
-    shadowRadius: 16,
-    elevation: 8,
-    marginTop: 8,
+    marginTop: 24,
   },
-  updateButtonPressed: {
+  footerLink: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#8b5cf6',
+  },
+  signInButton: {
+    backgroundColor: '#181818',
+    paddingVertical: 18,
+    borderRadius: 30,
+    marginHorizontal: 24,
+    alignItems: 'center',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  signInButtonPressed: {
     transform: [{ scale: 0.98 }],
-    backgroundColor: '#000',
+    backgroundColor: '#000000',
   },
-  updateButtonDisabled: {
+  signInButtonDisabled: {
     backgroundColor: '#94a3b8',
     shadowOpacity: 0,
   },
-  updateButtonText: {
+  signInButtonText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#fff',
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  backButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#4f46e5',
+    color: '#FFFFFF',
   },
 });

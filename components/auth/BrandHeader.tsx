@@ -1,16 +1,16 @@
-import { Zap } from 'lucide-react-native';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 
 export const BrandHeader = () => {
   return (
     <View style={styles.container}>
-      <View style={styles.iconContainer}>
+      {/* <View style={styles.iconContainer}>
         <Zap size={22} color="#fff" fill="#fff" />
       </View>
       <Text style={styles.brandText}>
         Her Utility<Text style={styles.brandAccent}></Text>
-      </Text>
+      </Text> */}
+      <Image source={require('@/assets/images/Logo_Horizontal Light.jpg 1.png')} />
     </View>
   );
 };

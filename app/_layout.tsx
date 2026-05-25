@@ -14,7 +14,10 @@ import { useColorScheme } from "@/components/useColorScheme";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { AuthProvider, useAuth } from "@/lib/auth/auth-context";
 import { QueryProvider } from "@/lib/query";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 
 //validate inputs
@@ -58,10 +61,12 @@ export default function RootLayout() {
   return (
     <QueryProvider>
       <AuthProvider>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <RootLayoutNav />
-          <Toast />
-        </GestureHandlerRootView>
+        <SafeAreaProvider>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <RootLayoutNav />
+            <Toast />
+          </GestureHandlerRootView>
+        </SafeAreaProvider>
       </AuthProvider>
     </QueryProvider>
   );
@@ -83,18 +88,23 @@ function RootLayoutNav() {
       // If user is signed in and in the (auth) group, redirect to the home page
       router.replace("/(tabs)");
     } else if (!isAuthenticated && segments[0] !== "(auth)") {
-      // If user is not signed in and explicitly trying to access non-auth pages, redirect to login
-      router.replace("/(auth)/login");
+      // If user is not signed in and explicitly trying to access non-auth pages, redirect to auth index
+      router.replace("/(auth)");
     }
   }, [isAuthenticated, segments, isLoading]);
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-      </Stack>
+      <BottomSheetModalProvider>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F2F4F8' }} edges={['top', 'bottom']}>
+          <StatusBar style="dark" />
+          <Stack>
+            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+          </Stack>
+        </SafeAreaView>
+      </BottomSheetModalProvider>
     </ThemeProvider>
   );
 }

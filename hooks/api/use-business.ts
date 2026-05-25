@@ -172,6 +172,29 @@ export function useCreateUtility() {
   );
 }
 
+/** Fetch all utilities for the user, optionally with parameters. */
+export function useUtilities(params?: { sortBy?: string; order?: string; status?: string; search?: string }) {
+  const { isAuthenticated } = useAuth();
+  
+  const queryParams = new URLSearchParams();
+  if (params?.sortBy) queryParams.append("sortBy", params.sortBy);
+  if (params?.order) queryParams.append("order", params.order);
+  if (params?.status) queryParams.append("status", params.status);
+  if (params?.search) queryParams.append("search", params.search);
+  
+  const queryString = queryParams.toString();
+  const endpoint = queryString ? `/api/utilities?${queryString}` : "/api/utilities";
+
+  // Note: utilityKeys.list() is an array like ["utilities", "list"]
+  const key = params ? [...utilityKeys.list(), params] : utilityKeys.list();
+
+  return useAppQuery<ApiResponse<{ utilities: Utility[] }>>(
+    key,
+    () => api.get<ApiResponse<{ utilities: Utility[] }>>(endpoint),
+    { staleTime: 30_000, enabled: isAuthenticated }
+  );
+}
+
 // ============================================================================
 // Site Hooks
 // ============================================================================

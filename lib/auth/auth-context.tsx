@@ -27,6 +27,7 @@ import {
   saveTokens,
   saveUser,
 } from "./auth-storage";
+import { saveBiometricCredentials, saveLastLoggedInUser } from "./biometric-storage";
 
 // ============================================================================
 // Types
@@ -229,6 +230,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await saveTokens(token, refreshToken);
       await saveUser(authUser);
+      
+      // Save credentials for biometric quick login
+      await saveBiometricCredentials(email, password);
+      await saveLastLoggedInUser(authUser);
 
       setState({
         user: authUser,
@@ -266,6 +271,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       await saveTokens(token, refreshToken);
       await saveUser(authUser);
+
+      // Save credentials for biometric quick login
+      await saveBiometricCredentials(email, password);
+      await saveLastLoggedInUser(authUser);
 
       setState({
         user: authUser,

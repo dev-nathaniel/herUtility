@@ -1,10 +1,21 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import Toast from 'react-native-toast-message';
 
+let Notifications: any;
+try {
+  Notifications = require('expo-notifications');
+} catch (e) {
+  console.warn('expo-notifications failed to load in notifications.ts:', e);
+}
+
 export async function registerForPushNotificationsAsync() {
+  if (!Notifications) {
+    console.warn('registerForPushNotificationsAsync: expo-notifications is not available');
+    return;
+  }
+
   let token;
 
   if (Platform.OS === 'android') {

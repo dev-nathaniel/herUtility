@@ -3,7 +3,7 @@ const IS_PREVIEW = process.env.APP_VARIANT === 'preview';
 
 const getUniqueIdentifier = () => {
     if (IS_DEV) {
-        return 'com.herutility.app.dev';
+        return 'com.herutility.app.devclient';
     }
 
     if (IS_PREVIEW) {
@@ -37,4 +37,29 @@ export default ({ config }) => ({
         ...config.android,
         package: getUniqueIdentifier(),
     },
+    plugins: [
+        ...(config.plugins || []),
+        "expo-font",
+        "expo-image",
+        "expo-web-browser",
+        "expo-secure-store",
+        [
+            "expo-local-authentication",
+            {
+                "faceIDPermission": "Allow Her Utility to use Biometrics for quick login."
+            }
+        ],
+        [
+            "expo-camera",
+            {
+                "cameraPermission": "Allow Her Utility to access your camera to scan bills."
+            }
+        ],
+        [
+            "react-native-document-scanner-plugin",
+            {
+                "cameraPermissionText": "Allow Her Utility to access your camera to scan documents."
+            }
+        ]
+    ]
 });
