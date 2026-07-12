@@ -12,16 +12,103 @@ import {
   StyleSheet,
   Text,
   View,
+  Alert,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import { AntDesign } from '@expo/vector-icons';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { login } = useAuth();
+  const { login, googleLogin } = useAuth();
   const [email, setEmail] = useState(params.email?.toString() || '');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  const handleGoogleSignIn = async () => {
+    const clientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+    const hasConfig = !!clientId;
+
+    if (hasConfig) {
+      setIsLoading(true);
+      try {
+        const redirectUri = Linking.createURL('/(auth)/login');
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${clientId}` +
+          `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+          `&response_type=id_token` +
+          `&scope=${encodeURIComponent('openid email profile')}` +
+          `&nonce=random_nonce`;
+
+        const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+        
+        if (result.type === 'success' && result.url) {
+          const parsed = Linking.parse(result.url);
+          const params = parsed.queryParams || {};
+          const idToken = params.id_token;
+          if (idToken) {
+            await googleLogin("", "", "", String(idToken));
+            Toast.show({
+              type: 'success',
+              text1: 'Authenticated',
+              text2: 'Logged in successfully with Google',
+            });
+            router.replace('/(tabs)');
+          } else {
+            throw new Error("No ID Token returned from Google");
+          }
+        }
+      } catch (e: any) {
+        Toast.show({
+          type: 'error',
+          text1: 'Google Login Error',
+          text2: e.message || 'Failed to authenticate with Google'
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      Alert.alert(
+        "Google Sign-In (Dev Sandbox)",
+        "Configure Google client IDs in your .env to use real OAuth. Choose an account to simulate login:",
+        [
+          {
+            text: "Sarah Jenkins (sarah.j@google.com)",
+            onPress: () => performMockLogin("sarah.j@google.com", "Sarah", "Jenkins")
+          },
+          {
+            text: "Jane Doe (jane.doe@gmail.com)",
+            onPress: () => performMockLogin("jane.doe@gmail.com", "Jane", "Doe")
+          },
+          {
+            text: "Cancel",
+            style: "cancel"
+          }
+        ]
+      );
+    }
+  };
+
+  const performMockLogin = async (email: string, firstName: string, lastName: string) => {
+    setIsLoading(true);
+    try {
+      await googleLogin(email, firstName, lastName);
+      Toast.show({
+        type: 'success',
+        text1: 'Authenticated',
+        text2: 'Logged in successfully with Google sandbox',
+      });
+      router.replace('/(tabs)');
+    } catch (error: any) {
+      Alert.alert("Google Login Error", error.message || "Failed to sign in");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -128,6 +215,27 @@ export default function LoginScreen() {
               <Text style={styles.signInButtonText}>Sign in</Text>
             )}
           </Pressable>
+
+          {/* Divider */}
+          {/* <View style={styles.dividerContainer}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View> */}
+
+          {/* Google Sign In Button */}
+          {/* <Pressable
+            style={({ pressed }) => [
+              styles.googleButton,
+              pressed && styles.googleButtonPressed,
+              isLoading && styles.googleButtonDisabled,
+            ]}
+            onPress={handleGoogleSignIn}
+            disabled={isLoading}
+          >
+            <AntDesign name="google" size={20} color="#0f172a" style={styles.googleIcon} />
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          </Pressable> */}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -242,5 +350,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 24,
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#cbd5e1',
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748b',
+    textTransform: 'uppercase',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    paddingVertical: 16,
+    borderRadius: 30,
+    marginHorizontal: 24,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  googleButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    backgroundColor: '#f8fafc',
+  },
+  googleButtonDisabled: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
+    shadowOpacity: 0,
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  googleIcon: {
+    marginRight: 10,
   },
 });

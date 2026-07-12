@@ -17,6 +17,7 @@ export default function AuthLayout() {
       <Stack.Screen name="new-password" />
       <Stack.Screen name="password-success" />
       <Stack.Screen name="quick-login" />
+      <Stack.Screen name="business-onboarding" />
     </Stack>
   );
 }
