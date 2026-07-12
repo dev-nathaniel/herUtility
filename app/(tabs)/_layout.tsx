@@ -1,18 +1,19 @@
 import HomeIcon from "@/assets/icons/HomeIcon";
 import Plus from "@/assets/icons/Plus";
+import ReportIcon from "@/assets/icons/ReportIcon";
 import Scan from "@/assets/icons/Scan";
 import SiteIcon from "@/assets/icons/SiteIcon";
-import ReportIcon from "@/assets/icons/ReportIcon";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Tabs, usePathname, useRouter } from "expo-router";
+import { BarChart3, Building2, Home as LucideHome, Scan as LucideScan } from "lucide-react-native";
 import React from "react";
 import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 
-import Animated, { Easing, FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
-import { useRef, useEffect } from "react";
+import { TourCompleteSheet } from "@/components/tour/TourCompleteSheet";
 import { TourProvider, useTour } from "@/components/tour/TourContext";
 import { TourOverlay } from "@/components/tour/TourOverlay";
-import { TourCompleteSheet } from "@/components/tour/TourCompleteSheet";
+import { useEffect, useRef } from "react";
+import Animated, { Easing, FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
@@ -186,6 +187,27 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+const TourTabBarButton = ({ name, children, ...props }: any) => {
+  const { registerElement } = useTour();
+  const ref = useRef<View>(null);
+
+  useEffect(() => {
+    registerElement(name, async () => {
+      return new Promise((resolve) => {
+        if (!ref.current) return resolve(null);
+        ref.current.measureInWindow((x, y, w, h) => {
+          resolve({ x, y, w, h });
+        });
+      });
+    });
+  }, [name, registerElement]);
+
+  return (
+    <TouchableOpacity ref={ref} {...props} activeOpacity={0.7}>
+      {children}
+    </TouchableOpacity>
+  );
+};
 
 export default function TabLayout() {
   const completeSheetRef = useRef<any>(null);
@@ -194,17 +216,53 @@ export default function TabLayout() {
     <TourProvider>
       <BottomSheetModalProvider>
         <Tabs
-          tabBar={(props) => <CustomTabBar {...props} />}
+          // tabBar={(props) => <CustomTabBar {...props} />}
           screenOptions={{
             headerShown: false,
+            tabBarActiveTintColor: '#8b5cf6',
+            tabBarInactiveTintColor: '#94a3b8',
+            tabBarStyle: {
+              backgroundColor: '#FFFFFF',
+              borderTopColor: '#f1f5f9',
+              borderTopWidth: 1,
+              paddingTop: 8,
+              // paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+              // height: Platform.OS === 'ios' ? 88 : 68,
+            }
           }}
         >
-          <Tabs.Screen name="index" options={{ title: "Home" }} />
+          <Tabs.Screen
+            name="index"
+            options={{
+              title: "Home",
+              tabBarIcon: ({ color }) => <LucideHome color={color} size={22} />
+            }}
+          />
           <Tabs.Screen name="portfolio" options={{ href: null }} />
           <Tabs.Screen name="settings" options={{ href: null }} />
-          <Tabs.Screen name="scanner" options={{ title: "Scan" }} />
-          <Tabs.Screen name="sites" options={{ title: "Sites" }} />
-          <Tabs.Screen name="reports" options={{ title: "Reports" }} />
+          <Tabs.Screen
+            name="scanner"
+            options={{
+              title: "Scan",
+              tabBarIcon: ({ color }) => <LucideScan color={color} size={22} />,
+              tabBarButton: (props) => <TourTabBarButton name="scanner_tab" {...props} />
+            }}
+          />
+          <Tabs.Screen
+            name="sites"
+            options={{
+              title: "Sites",
+              tabBarIcon: ({ color }) => <Building2 color={color} size={22} />,
+              tabBarButton: (props) => <TourTabBarButton name="sites_tab" {...props} />
+            }}
+          />
+          <Tabs.Screen
+            name="reports"
+            options={{
+              title: "Reports",
+              tabBarIcon: ({ color }) => <BarChart3 color={color} size={22} />
+            }}
+          />
           <Tabs.Screen name="profile" options={{ title: "Profile", href: null }} />
         </Tabs>
         <TourOverlay completeSheetRef={completeSheetRef} />

@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState, useEffect } from "react";
-import { StyleSheet, ScrollView, View, Text, TouchableOpacity, Switch, Linking, Alert } from "react-native";
+import { StyleSheet, ScrollView, View, Text, TouchableOpacity, Switch, Linking, Alert, ActivityIndicator } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Bell, Lock, Handshake, Shield, Headphones, HelpCircle, LogOut, ChevronRight, Play, Mail } from 'lucide-react-native';
@@ -14,9 +14,9 @@ import {
 } from "@gorhom/bottom-sheet";
 
 import { useUpdateUser, useDeleteAccount } from "@/hooks/api/use-user";
-import { apiClient } from "@/lib/api";
+import { apiClient, api } from "@/lib/api";
 import { useAuth } from "@/lib/auth/auth-context";
-import { getBiometricCredentials, clearBiometricCredentials } from '@/lib/auth/biometric-storage';
+import { getBiometricCredentials, clearBiometricCredentials, saveBiometricCredentials } from '@/lib/auth/biometric-storage';
 import { useTour } from "@/components/tour/TourContext";
 
 export default function ProfileScreen() {
@@ -33,6 +33,7 @@ export default function ProfileScreen() {
 
   const editProfileSheetRef = useRef<BottomSheetModal>(null);
   const logoutSheetRef = useRef<BottomSheetModal>(null);
+  const biometricPasswordSheetRef = useRef<BottomSheetModal>(null);
 
   useEffect(() => {
     async function checkBiometricStatus() {
@@ -59,24 +60,48 @@ export default function ProfileScreen() {
 
   const toggleBiometric = async (value: boolean) => {
     if (value) {
-      Alert.alert(
-        'Enable Biometric Login',
-        'Your credentials will be securely stored to allow you to log in with Face ID or Touch ID.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Enable', 
-            onPress: async () => {
-              if (user?.email) {
-                setBiometricEnabled(true);
-              }
-            } 
-          }
-        ]
-      );
+      biometricPasswordSheetRef.current?.present();
     } else {
       await clearBiometricCredentials();
       setBiometricEnabled(false);
+      Toast.show({
+        type: "success",
+        text1: "Biometrics Disabled",
+        text2: "Face ID / Touch ID setup has been cleared.",
+      });
+    }
+  };
+
+  const handleConfirmBiometricPassword = async (password: string) => {
+    if (!user?.email) return;
+    try {
+      const response = await api.post<any>(
+        "/api/auth/login",
+        { email: user.email, password },
+        { skipAuth: true }
+      );
+      if (response && response.success) {
+        await saveBiometricCredentials(user.email, password);
+        setBiometricEnabled(true);
+        biometricPasswordSheetRef.current?.close();
+        Toast.show({
+          type: "success",
+          text1: "Biometrics Enabled",
+          text2: "Face ID / Touch ID setup successfully completed.",
+        });
+      } else {
+        Toast.show({
+          type: "error",
+          text1: "Verification Failed",
+          text2: response?.message || "Incorrect password. Please try again.",
+        });
+      }
+    } catch (error: any) {
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: error?.message || "Failed to verify password. Please try again.",
+      });
     }
   };
 
@@ -373,6 +398,13 @@ export default function ProfileScreen() {
         onConfirm={handleLogout}
         renderBackdrop={renderBackdrop}
       />
+
+      {/* Biometric Password Confirmation Modal */}
+      <BiometricPasswordConfirmModal
+        bottomSheetRef={biometricPasswordSheetRef}
+        onConfirm={handleConfirmBiometricPassword}
+        renderBackdrop={renderBackdrop}
+      />
     </View>
   );
 }
@@ -396,8 +428,9 @@ const EditProfileModal = ({
       backgroundStyle={styles.sheetBackground}
       handleIndicatorStyle={styles.sheetIndicator}
       maxDynamicContentSize={500}
-      keyboardBehavior="extend"
+      keyboardBehavior="interactive"
       keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
     >
       <BottomSheetView>
         <View style={styles.sheetHeader}>
@@ -513,6 +546,84 @@ const LogoutConfirmModal = ({
     </BottomSheetView>
   </BottomSheetModal>
 );
+
+const BiometricPasswordConfirmModal = ({
+  bottomSheetRef,
+  onConfirm,
+  renderBackdrop,
+}: any) => {
+  const [password, setPassword] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  return (
+    <BottomSheetModal
+      ref={bottomSheetRef}
+      enableDynamicSizing
+      enablePanDownToClose
+      backdropComponent={renderBackdrop}
+      backgroundStyle={styles.sheetBackground}
+      handleIndicatorStyle={styles.sheetIndicator}
+      maxDynamicContentSize={400}
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
+      onDismiss={() => setPassword("")}
+    >
+      <BottomSheetView>
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>Enable Biometrics</Text>
+          <TouchableOpacity
+            style={styles.sheetClose}
+            onPress={() => bottomSheetRef.current?.close()}
+          >
+            <Ionicons name="close" size={16} color="#94a3b8" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.sheetBody}>
+          <Text style={{ fontSize: 14, color: '#64748b', textAlign: 'center', marginBottom: 24 }}>
+            Please confirm your password to securely enable Face ID / Touch ID login.
+          </Text>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Password</Text>
+            <BottomSheetTextInput
+              style={styles.textInput}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Enter your password"
+              placeholderTextColor="#94a3b8"
+              secureTextEntry
+              autoCapitalize="none"
+              autoComplete="password"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.saveButton, isSubmitting && { opacity: 0.7 }]}
+            onPress={async () => {
+              if (!password) return;
+              setIsSubmitting(true);
+              try {
+                await onConfirm(password);
+                setPassword("");
+              } finally {
+                setIsSubmitting(false);
+              }
+            }}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.saveButtonText}>Confirm Password</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </BottomSheetView>
+    </BottomSheetModal>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
