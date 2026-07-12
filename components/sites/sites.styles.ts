@@ -657,12 +657,13 @@ export const styles = StyleSheet.create({
         borderRadius: 12,
     },
     dropdownText: {
-        fontSize: 14,
-        fontWeight: "500",
-        color: "#1e293b",
+        fontSize: 15,
+        fontWeight: "700",
+        color: "#181818",
     },
     dropdownPlaceholder: {
         color: "#94a3b8",
+        fontWeight: "700",
     },
     dropdownList: {
         marginTop: 8,
@@ -697,14 +698,13 @@ export const styles = StyleSheet.create({
         fontWeight: "700",
     },
     dropdownItemText: {
-        flex: 1,
-        fontSize: 14,
-        fontWeight: "500",
+        fontSize: 15,
+        fontWeight: "700",
         color: "#64748b",
     },
     dropdownItemTextActive: {
-        color: "#1e293b",
-        fontWeight: "600",
+        color: "#181818",
+        fontWeight: "800",
     },
 
     // Button container
@@ -848,5 +848,68 @@ export const styles = StyleSheet.create({
     inactiveDot: {
         width: 6,
         backgroundColor: '#cbd5e1',
+    },
+    filterHeaderContainer: {
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingHorizontal: 24,
+        paddingTop: 16,
+        paddingBottom: 24,
+    },
+    filterSelector: {
+        flex: 1,
+        marginRight: 16,
+    },
+    filterLabel: {
+        fontSize: 11,
+        fontWeight: "700",
+        color: "#94a3b8",
+        marginBottom: 4,
+        textTransform: "uppercase",
+        letterSpacing: 0.5,
+    },
+    filterValueContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    filterValueText: {
+        fontSize: 18,
+        fontWeight: "800",
+        color: "#181818",
+    },
+    filterChevron: {
+        marginLeft: 6,
+        marginTop: 2,
+    },
+    sheetFilterItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: 16,
+        borderRadius: 16,
+        marginBottom: 8,
+        backgroundColor: "#f8fafc",
+        borderWidth: 1,
+        borderColor: "#f1f5f9",
+    },
+    sheetFilterItemActive: {
+        backgroundColor: "#f8fafc",
+        borderColor: "#181818",
+    },
+    sheetFilterItemText: {
+        fontSize: 15,
+        fontWeight: "600",
+        color: "#64748b",
+    },
+    sheetFilterItemTextActive: {
+        color: "#181818",
+        fontWeight: "700",
+    },
+    siteBusinessBadge: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: "#94a3b8",
+        marginTop: 2,
     },
 });

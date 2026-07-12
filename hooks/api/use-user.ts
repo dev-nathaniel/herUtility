@@ -24,6 +24,7 @@ export interface User {
   profilePicture?: string;
   expoPushTokens?: string[];
   pushNotificationsEnabled: boolean;
+  emailAlertsEnabled: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -35,6 +36,7 @@ export interface UpdateUserInput {
   email?: string;
   expoPushToken?: string;
   pushNotificationsEnabled?: boolean;
+  emailAlertsEnabled?: boolean;
 }
 
 // ============================================================================

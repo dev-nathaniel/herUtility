@@ -1,8 +1,9 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
+import * as DocumentPicker from "expo-document-picker";
 import { Image } from "expo-image";
-import * as ImagePicker from "expo-image-picker";
+import { extractText } from "expo-pdf-text-extract";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Info, X } from "lucide-react-native";
+import { FileText, Info, X } from "lucide-react-native";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -11,8 +12,10 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  View
+  View,
+  ScrollView
 } from "react-native";
+import DocumentScanner from "react-native-document-scanner-plugin";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 
@@ -26,6 +29,15 @@ export default function ScannerScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
 
+  interface ScannedFile {
+    uri: string;
+    type: "pdf" | "image";
+    name?: string;
+    extractedText?: string;
+  }
+
+  const [scannedFile, setScannedFile] = useState<ScannedFile | null>(null);
+
   useEffect(() => {
     if (params.autoStart === "true") {
       openCamera();
@@ -34,33 +46,95 @@ export default function ScannerScreen() {
   }, [params.autoStart]);
 
   const handleUpload = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 1,
-    });
+    try {
+      console.log("[Scanner] Launching document picker...");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/*"],
+        copyToCacheDirectory: true,
+      });
 
-    if (!result.canceled) {
-      processImage(result.assets[0].uri);
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const pickedFile = result.assets[0];
+        const { uri, mimeType, name } = pickedFile;
+        console.log("[Scanner] Picked file success:", pickedFile);
+
+        const isPdf = mimeType === "application/pdf" || name.toLowerCase().endsWith(".pdf");
+
+        if (isPdf) {
+          console.log("[Scanner] PDF file detected. Extracting text content...");
+          Toast.show({
+            type: "info",
+            text1: "Processing PDF",
+            text2: "Extracting text from your document...",
+          });
+
+          const text = await extractText(uri);
+          console.log("[Scanner] Extracted text from PDF successfully:\n", text);
+
+          setScannedFile({
+            uri,
+            type: "pdf",
+            name,
+            extractedText: text,
+          });
+
+          Toast.show({
+            type: "success",
+            text1: "PDF Extracted",
+            text2: "Preview the extracted text below before proceeding.",
+          });
+        } else {
+          // Standard image file - process normally
+          console.log("[Scanner] Image file detected. Processing...");
+          processImage(uri);
+        }
+      } else {
+        console.log("[Scanner] Document picker cancelled.");
+      }
+    } catch (error) {
+      console.error("[Scanner] Error picking/extracting document:", error);
+      Toast.show({
+        type: "error",
+        text1: "Upload Failed",
+        text2: "An error occurred while uploading or processing the file.",
+      });
     }
   };
 
   const openCamera = async () => {
-    if (!permission) {
-      await requestPermission();
-      return;
-    }
-    if (!permission.granted) {
-      const { status } = await requestPermission();
-      if (status !== 'granted') {
-        Alert.alert(
-          "Permission Required",
-          "Camera permission is required to scan bills."
-        );
+    try {
+      console.log("[Scanner] Attempting to open native document scanner...");
+      const { scannedImages } = await DocumentScanner.scanDocument({
+        // letUserAdjustCrop: true,
+        maxNumDocuments: 1,
+      });
+
+      if (scannedImages && scannedImages.length > 0) {
+        console.log("[Scanner] Document scanned successfully:", scannedImages[0]);
+        processImage(scannedImages[0]);
         return;
       }
+      console.log("[Scanner] Document scanning was cancelled or returned no images.");
+    } catch (e) {
+      console.warn("[Scanner] Native document scanner failed or not supported in this environment:", e);
+      // Fallback to custom camera view
+      console.log("[Scanner] Falling back to custom CameraView...");
+      if (!permission) {
+        await requestPermission();
+        return;
+      }
+      if (!permission.granted) {
+        const { status } = await requestPermission();
+        if (status !== 'granted') {
+          Alert.alert(
+            "Permission Required",
+            "Camera permission is required to scan bills."
+          );
+          return;
+        }
+      }
+      setIsCameraActive(true);
     }
-    setIsCameraActive(true);
   };
 
   const takePicture = async () => {
@@ -82,11 +156,24 @@ export default function ScannerScreen() {
   };
 
   const processImage = (uri: string) => {
+    setScannedFile({
+      uri,
+      type: "image",
+    });
     Toast.show({
       type: "success",
       text1: "Bill Extracted",
-      text2: "Successfully pulled details from your bill.",
+      text2: "Preview the image below before proceeding.",
     });
+  };
+
+  const handleConfirm = () => {
+    Toast.show({
+      type: "success",
+      text1: "Bill Processed",
+      text2: "Your bill has been submitted successfully!",
+    });
+    setScannedFile(null);
   };
 
   const renderBrackets = (color = "#181818") => (
@@ -127,42 +214,114 @@ export default function ScannerScreen() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: 20, paddingHorizontal: 24, paddingBottom: 100 }]}>
-
-      {/* Scanner Frame Area */}
-      <View style={styles.idleFrameContainer}>
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Scanner Frame / Preview Area */}
+        <View style={[styles.idleFrameContainer, !scannedFile && { height: 360, marginTop: 10 }]}>
         {renderBrackets("#181818")}
-        <View style={styles.idleFrameContent}>
-          <Image
-            source={require("@/assets/images/quote_illustration.png")}
-            style={styles.docIllustration}
-          // contentFit="contain"
-          />
-          <Text style={styles.scanText}>Scan your bill to find{'\n'}savings.</Text>
-        </View>
+        {scannedFile ? (
+          scannedFile.type === "image" ? (
+            <Image
+              source={{ uri: scannedFile.uri }}
+              style={styles.previewImage}
+              contentFit="contain"
+            />
+          ) : (
+            <View style={styles.pdfPreviewContainer}>
+              <View style={styles.pdfCard}>
+                <FileText size={48} color="#181818" style={styles.pdfIcon} />
+                <Text style={styles.pdfName} numberOfLines={2}>
+                  {scannedFile.name || "document.pdf"}
+                </Text>
+                <Text style={styles.pdfMeta}>PDF Document</Text>
+                <View style={styles.pdfStatusBadge}>
+                  <Text style={styles.pdfStatusText}>Ready to Process</Text>
+                </View>
+              </View>
+            </View>
+          )
+        ) : (
+          <View style={styles.idleFrameContent}>
+            <Image
+              source={require("@/assets/images/quote_illustration.png")}
+              style={[styles.docIllustration, { width: 270, height: 270 }]}
+            />
+            <Text style={[styles.scanText, { fontSize: 16, lineHeight: 22, marginTop: -10 }]}>Scan your bill to find savings</Text>
+          </View>
+        )}
       </View>
 
-      {/* Info Text Area */}
-      <View style={styles.infoContainer}>
-        <Info size={20} color="#181818" style={styles.infoIcon} />
-        <Text style={styles.infoText}>
-          Our AI extracts your usage data so our experts can find you a better rate. No manual typing required
-        </Text>
-      </View>
+      {/* Info / How it Works Area */}
+      {!scannedFile ? (
+        <View style={styles.howItWorksContainer}>
+          <Text style={styles.howItWorksTitle}>How it works</Text>
+
+          <View style={styles.stepRow}>
+            <Info size={16} color="#181818" style={styles.stepIcon} />
+            <Text style={styles.stepText}>
+              Scan a clear photo of every page of your latest gas or electric bill (up to 4)
+            </Text>
+          </View>
+
+          <View style={styles.stepRow}>
+            <Info size={16} color="#181818" style={styles.stepIcon} />
+            <Text style={styles.stepText}>
+              We auto-fill the supplier, rates, dates and meter details - no typing needed
+            </Text>
+          </View>
+
+          <View style={styles.stepRow}>
+            <Info size={16} color="#181818" style={styles.stepIcon} />
+            <Text style={styles.stepText}>
+              We match it to one of your sites or set up a new one for you
+            </Text>
+          </View>
+
+          <View style={styles.stepRow}>
+            <Info size={16} color="#181818" style={styles.stepIcon} />
+            <Text style={styles.stepText}>
+              Just check the details look right and tap confirm
+            </Text>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.infoContainer}>
+          <Info size={20} color="#181818" style={styles.infoIcon} />
+          <Text style={styles.infoText}>
+            Our AI extracts your usage data so our experts can find you a better rate. No manual typing required
+          </Text>
+        </View>
+      )}
 
       <View style={{ flex: 1 }} />
 
       {/* Action Buttons */}
       <View style={styles.buttonGroup}>
-        <TouchableOpacity style={styles.cameraBtn} onPress={openCamera}>
-          <Text style={styles.cameraBtnText}>Camera</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.uploadBtn} onPress={handleUpload}>
-          <Text style={styles.uploadBtnText}>Upload</Text>
-        </TouchableOpacity>
+        {scannedFile ? (
+          <>
+            <TouchableOpacity style={styles.cameraBtn} onPress={() => setScannedFile(null)}>
+              <Text style={styles.cameraBtnText}>Scan Again</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.uploadBtn} onPress={handleConfirm}>
+              <Text style={styles.uploadBtnText}>Proceed</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.cameraBtn} onPress={openCamera}>
+              <Text style={styles.cameraBtnText}>Camera</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.uploadBtn} onPress={handleUpload}>
+              <Text style={styles.uploadBtnText}>Upload</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
-
-    </View>
+    </ScrollView>
+  </View>
   );
 }
 
@@ -170,6 +329,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 120,
   },
   idleFrameContainer: {
     height: 380,
@@ -247,6 +412,38 @@ const styles = StyleSheet.create({
     color: '#181818',
     lineHeight: 18,
     fontWeight: '500',
+  },
+  howItWorksContainer: {
+    backgroundColor: "#F8FAFC",
+    borderRadius: 20,
+    padding: 20,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+  },
+  howItWorksTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 16,
+    fontFamily: "System",
+  },
+  stepRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 14,
+  },
+  stepIcon: {
+    marginRight: 12,
+    marginTop: 1,
+  },
+  stepText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#334155",
+    lineHeight: 18,
+    fontWeight: "500",
+    fontFamily: "System",
   },
   buttonGroup: {
     flexDirection: 'row',
@@ -330,5 +527,59 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     backgroundColor: '#FFFFFF',
+  },
+  previewImage: {
+    width: '90%',
+    height: '90%',
+    borderRadius: 12,
+  },
+  pdfPreviewContainer: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  pdfCard: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+    padding: 24,
+    width: '100%',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  pdfIcon: {
+    marginBottom: 16,
+  },
+  pdfName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#181818',
+    textAlign: 'center',
+    marginBottom: 6,
+    lineHeight: 22,
+  },
+  pdfMeta: {
+    fontSize: 13,
+    color: '#8C8C8C',
+    fontWeight: '500',
+    marginBottom: 20,
+  },
+  pdfStatusBadge: {
+    backgroundColor: '#E6F4EA',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  pdfStatusText: {
+    fontSize: 12,
+    color: '#137333',
+    fontWeight: '600',
   }
 });

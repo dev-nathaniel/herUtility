@@ -2,27 +2,57 @@ import HomeIcon from "@/assets/icons/HomeIcon";
 import Plus from "@/assets/icons/Plus";
 import Scan from "@/assets/icons/Scan";
 import SiteIcon from "@/assets/icons/SiteIcon";
+import ReportIcon from "@/assets/icons/ReportIcon";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { Tabs, usePathname, useRouter } from "expo-router";
 import React from "react";
 import { Platform, StyleSheet, TouchableOpacity, View } from "react-native";
 
 import Animated, { Easing, FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import { useRef, useEffect } from "react";
+import { TourProvider, useTour } from "@/components/tour/TourContext";
+import { TourOverlay } from "@/components/tour/TourOverlay";
+import { TourCompleteSheet } from "@/components/tour/TourCompleteSheet";
 
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const pathname = usePathname();
   const router = useRouter();
+  const { registerElement } = useTour();
+
+  const sitesRef = useRef<View>(null);
+  const scannerRef = useRef<View>(null);
+
+  useEffect(() => {
+    registerElement("sites_tab", async () => {
+      return new Promise((resolve) => {
+        if (!sitesRef.current) return resolve(null);
+        sitesRef.current.measureInWindow((x, y, w, h) => {
+          resolve({ x, y, w, h });
+        });
+      });
+    });
+
+    registerElement("scanner_tab", async () => {
+      return new Promise((resolve) => {
+        if (!scannerRef.current) return resolve(null);
+        scannerRef.current.measureInWindow((x, y, w, h) => {
+          resolve({ x, y, w, h });
+        });
+      });
+    });
+  }, []);
 
   const icons: any = {
     index: HomeIcon,
     scanner: Scan,
     sites: SiteIcon,
+    reports: ReportIcon,
   };
 
   // Define which routes to show in the left pill
-  const pillRoutes = ["index", "scanner", "sites"];
+  const pillRoutes = ["index", "scanner", "sites", "reports"];
 
   const currentRouteName = state.routes[state.index]?.name;
   const isHome = currentRouteName === "index";
@@ -55,6 +85,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
               <TouchableOpacity
                 key={route.key}
                 onPress={onPress}
+                {...(route.name === "sites" ? { ref: sitesRef } : route.name === "scanner" ? { ref: scannerRef } : {})}
                 style={[styles.tabButton, isFocused && styles.tabButtonActive]}
               >
                 <View pointerEvents="none">
@@ -157,21 +188,28 @@ const styles = StyleSheet.create({
 });
 
 export default function TabLayout() {
+  const completeSheetRef = useRef<any>(null);
+
   return (
-    <BottomSheetModalProvider>
-      <Tabs
-        tabBar={(props) => <CustomTabBar {...props} />}
-        screenOptions={{
-          headerShown: false,
-        }}
-      >
-        <Tabs.Screen name="index" options={{ title: "Home" }} />
-        <Tabs.Screen name="portfolio" options={{ href: null }} />
-        <Tabs.Screen name="settings" options={{ href: null }} />
-        <Tabs.Screen name="scanner" options={{ title: "Scan" }} />
-        <Tabs.Screen name="sites" options={{ title: "Sites" }} />
-        <Tabs.Screen name="profile" options={{ title: "Profile", href: null }} />
-      </Tabs>
-    </BottomSheetModalProvider>
+    <TourProvider>
+      <BottomSheetModalProvider>
+        <Tabs
+          tabBar={(props) => <CustomTabBar {...props} />}
+          screenOptions={{
+            headerShown: false,
+          }}
+        >
+          <Tabs.Screen name="index" options={{ title: "Home" }} />
+          <Tabs.Screen name="portfolio" options={{ href: null }} />
+          <Tabs.Screen name="settings" options={{ href: null }} />
+          <Tabs.Screen name="scanner" options={{ title: "Scan" }} />
+          <Tabs.Screen name="sites" options={{ title: "Sites" }} />
+          <Tabs.Screen name="reports" options={{ title: "Reports" }} />
+          <Tabs.Screen name="profile" options={{ title: "Profile", href: null }} />
+        </Tabs>
+        <TourOverlay completeSheetRef={completeSheetRef} />
+        <TourCompleteSheet ref={completeSheetRef} />
+      </BottomSheetModalProvider>
+    </TourProvider>
   );
 }

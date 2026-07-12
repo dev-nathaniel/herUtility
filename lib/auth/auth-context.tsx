@@ -43,6 +43,7 @@ export interface AuthUser {
   profilePicture?: string;
   expoPushTokens?: string[];
   pushNotificationsEnabled: boolean;
+  emailAlertsEnabled: boolean;
 }
 
 interface LoginResponse {
@@ -56,6 +57,7 @@ interface LoginResponse {
     profilePicture?: string;
     expoPushTokens?: string[];
     pushNotificationsEnabled: boolean;
+    emailAlertsEnabled: boolean;
   };
   token: string;
   refreshToken: string;
@@ -117,12 +119,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Token refresh handler (called by api-client on 401)
   // ------------------------------------------------------------------
   const handleTokenRefresh = useCallback(async (): Promise<string | null> => {
+    console.log("[auth-context] handleTokenRefresh initiated");
     try {
       const refreshToken = await getRefreshToken();
-      if (!refreshToken) return null;
+      if (!refreshToken) {
+        console.log("[auth-context] No refresh token found in storage.");
+        return null;
+      }
+
+      const url = `${process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:5000"}/auth/refresh-token`;
+      console.log(`[auth-context] Sending token refresh request to: ${url}`);
 
       const response = await fetch(
-        `${process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:5000"}/api/auth/refresh-token`,
+        url,
         {
           method: "POST",
           headers: {
@@ -132,15 +141,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       );
 
-      if (!response.ok) return null;
+      console.log(`[auth-context] Refresh response status: ${response.status}`);
+      if (!response.ok) {
+        console.log(`[auth-context] Refresh failed with status: ${response.status}`);
+        return null;
+      }
 
       const data = (await response.json()) as ApiResponse<RefreshResponse>;
       if (data.success && data.data?.token) {
+        console.log("[auth-context] Token refresh succeeded. Saving new access token.");
         await saveAccessToken(data.data.token);
         return data.data.token;
       }
+      console.log("[auth-context] Token refresh response success was false or token missing.");
       return null;
-    } catch {
+    } catch (error) {
+      console.error("[auth-context] Error during token refresh fetch:", error);
       return null;
     }
   }, []);
@@ -149,15 +165,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Unauthorized handler (called by api-client when auth fails)
   // ------------------------------------------------------------------
   const handleUnauthorized = useCallback(async () => {
+    console.log(`[auth-context] handleUnauthorized called. isLoggingOut: ${isLoggingOut.current}`);
     if (isLoggingOut.current) return;
-    
+
+    console.log("[auth-context] Clearing all auth data and forcing redirect to login...");
     await clearAllAuthData();
     resetQueryClient();
     setState({ user: null, isAuthenticated: false, isLoading: false });
     if (router.canDismiss()) {
       router.dismissAll();
     }
-    router.replace("/(auth)/login");
+    router.replace("/(auth)/quick-login");
   }, [router]);
 
   // ------------------------------------------------------------------
@@ -211,7 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
       if (!response.success || !response.data) {
-      console.log(response);
+        console.log(response);
         throw new Error(response.message || "Login failed");
       }
 
@@ -226,11 +244,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profilePicture: user.profilePicture,
         expoPushTokens: user.expoPushTokens,
         pushNotificationsEnabled: user.pushNotificationsEnabled,
+        emailAlertsEnabled: user.emailAlertsEnabled,
       };
 
       await saveTokens(token, refreshToken);
       await saveUser(authUser);
-      
+
       // Save credentials for biometric quick login
       await saveBiometricCredentials(email, password);
       await saveLastLoggedInUser(authUser);
@@ -252,7 +271,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         { skipAuth: true }
       );
 
+      console.log('Registration response:', response);
+
       if (!response.success || !response.data) {
+        console.log(response);
         throw new Error(response.message || "Registration failed");
       }
 
@@ -267,6 +289,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profilePicture: user.profilePicture,
         expoPushTokens: user.expoPushTokens,
         pushNotificationsEnabled: user.pushNotificationsEnabled,
+        emailAlertsEnabled: user.emailAlertsEnabled,
       };
 
       await saveTokens(token, refreshToken);

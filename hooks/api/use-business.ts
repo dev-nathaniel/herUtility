@@ -25,7 +25,7 @@ export interface Business {
   postcode?: string;
   members: BusinessMember[];
   sites?: string[];
-  utilities?: string[];
+  utilities?: (Utility | string)[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -58,6 +58,11 @@ export interface Utility {
   previousContractExpiry?: string;
   previousMeterId?: string;
   previousSupplier?: string;
+  tariffRate?: number;
+  standingCharge?: number;
+  annualUsage?: number;
+  estimatedAnnualCost?: number;
+  meterSerial?: string;
   createdAt?: string;
   updatedAt?: string;
 }

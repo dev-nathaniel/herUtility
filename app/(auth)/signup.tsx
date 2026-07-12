@@ -59,6 +59,7 @@ export default function SignUpScreen() {
         text1: 'Registration Failed',
         text2: error?.message || 'Could not create account',
       });
+      console.log('Registration failed:', error);
     } finally {
       setIsLoading(false);
     }

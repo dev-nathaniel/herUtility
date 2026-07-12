@@ -37,6 +37,7 @@ let config: ApiClientConfig = {
  * Call this at app initialization to set up auth handlers
  */
 export function configureApiClient(newConfig: Partial<ApiClientConfig>): void {
+  console.log("[api-client] configureApiClient called with keys:", Object.keys(newConfig));
   config = { ...config, ...newConfig };
 }
 
@@ -147,16 +148,24 @@ async function request<T>(endpoint: string, options: FetchOptions = {}): Promise
 
     // Handle unauthorized - attempt token refresh
     if (response.status === 401) {
+      console.log(`[api-client] Request to ${endpoint} returned 401. skipAuth: ${skipAuth}`);
       // For public auth endpoints (skipAuth), don't trigger session-clearing
       // logic — a 401 here just means invalid credentials, not an expired session.
       if (!skipAuth) {
         if (config.onTokenRefresh) {
+          console.log("[api-client] Attempting token refresh...");
           const newToken = await config.onTokenRefresh();
           if (newToken) {
+            console.log("[api-client] Token refresh succeeded. Retrying original request...");
             // Retry request with new token
             return request(endpoint, { ...options, skipAuth: false });
+          } else {
+            console.log("[api-client] Token refresh returned null.");
           }
+        } else {
+          console.log("[api-client] No onTokenRefresh handler configured.");
         }
+        console.log("[api-client] Calling onUnauthorized handler...");
         config.onUnauthorized();
       }
       throw await parseErrorResponse(response);

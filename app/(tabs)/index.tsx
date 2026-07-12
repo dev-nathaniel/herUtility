@@ -12,7 +12,8 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { Image as ExpoImage } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useEffect } from "react";
+import { useTour } from "@/components/tour/TourContext";
 import {
   Dimensions,
   Image,
@@ -95,6 +96,51 @@ function mapUtility(util: ApiUtility, businessId: string, businessName: string =
 export default function TabOneScreen() {
   const router = useRouter();
   const { user } = useAuth();
+
+  const { 
+    registerElement, 
+    scrollToQuoteRequested, 
+    clearScrollToQuoteRequest,
+    scrollToTopRequested,
+    clearScrollToTopRequest
+  } = useTour();
+  const scrollViewRef = useRef<ScrollView>(null);
+  const quoteCardRef = useRef<any>(null);
+  const profileAvatarRef = useRef<any>(null);
+
+  useEffect(() => {
+    registerElement("quote_card", async () => {
+      return new Promise((resolve) => {
+        if (!quoteCardRef.current) return resolve(null);
+        quoteCardRef.current.measureInWindow((x: number, y: number, w: number, h: number) => {
+          resolve({ x, y, w, h });
+        });
+      });
+    });
+
+    registerElement("profile_avatar", async () => {
+      return new Promise((resolve) => {
+        if (!profileAvatarRef.current) return resolve(null);
+        profileAvatarRef.current.measureInWindow((x: number, y: number, w: number, h: number) => {
+          resolve({ x, y, w, h });
+        });
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (scrollToQuoteRequested) {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+      clearScrollToQuoteRequest();
+    }
+  }, [scrollToQuoteRequested]);
+
+  useEffect(() => {
+    if (scrollToTopRequested) {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+      clearScrollToTopRequest();
+    }
+  }, [scrollToTopRequested]);
 
   // Fetch real data from API
   const businessesQuery = useBusinesses();
@@ -210,12 +256,14 @@ export default function TabOneScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
+        ref={scrollViewRef}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {/* Header Section */}
         <View style={styles.header}>
           <TouchableOpacity
+            ref={profileAvatarRef}
             style={styles.profileImageContainer}
             onPress={() => router.push("/(tabs)/profile")}
             activeOpacity={0.8}
@@ -303,6 +351,7 @@ export default function TabOneScreen() {
         <View style={styles.actionCardsRow}>
           {/* Get a Quote Card */}
           <TouchableOpacity
+            ref={quoteCardRef}
             style={styles.actionCard}
             activeOpacity={0.9}
             onPress={() => router.push("/(tabs)/sites")}

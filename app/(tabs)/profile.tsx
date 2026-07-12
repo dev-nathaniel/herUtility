@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useState, useEffect } from "react";
 import { StyleSheet, ScrollView, View, Text, TouchableOpacity, Switch, Linking, Alert } from "react-native";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { Bell, Lock, Handshake, Shield, Headphones, HelpCircle, LogOut, ChevronRight } from 'lucide-react-native';
+import { Bell, Lock, Handshake, Shield, Headphones, HelpCircle, LogOut, ChevronRight, Play, Mail } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from "react-native-toast-message";
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -13,19 +13,23 @@ import {
   BottomSheetView,
 } from "@gorhom/bottom-sheet";
 
-import { useUpdateUser } from "@/hooks/api/use-user";
+import { useUpdateUser, useDeleteAccount } from "@/hooks/api/use-user";
 import { apiClient } from "@/lib/api";
 import { useAuth } from "@/lib/auth/auth-context";
 import { getBiometricCredentials, clearBiometricCredentials } from '@/lib/auth/biometric-storage';
+import { useTour } from "@/components/tour/TourContext";
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, logout, updateUser } = useAuth();
   
+  const { startTour } = useTour();
   const [notificationsEnabled, setNotificationsEnabled] = useState(user?.pushNotificationsEnabled ?? true);
+  const [emailAlertsEnabled, setEmailAlertsEnabled] = useState(user?.emailAlertsEnabled ?? true);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const updateUserMutation = useUpdateUser(user?.id ?? '');
+  const deleteAccountMutation = useDeleteAccount(user?.id ?? '');
 
   const editProfileSheetRef = useRef<BottomSheetModal>(null);
   const logoutSheetRef = useRef<BottomSheetModal>(null);
@@ -105,6 +109,57 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleToggleEmailAlerts = async (value: boolean) => {
+    try {
+      setEmailAlertsEnabled(value);
+      await updateUserMutation.mutateAsync({ emailAlertsEnabled: value });
+      updateUser({ ...user!, emailAlertsEnabled: value });
+    } catch (error) {
+      console.error("Failed to toggle email alerts:", error);
+      setEmailAlertsEnabled(!value);
+      Toast.show({
+        type: "error",
+        text1: "Error",
+        text2: "Failed to update email settings",
+      });
+    }
+  };
+
+  const handleReplayProductTour = () => {
+    startTour();
+  };
+
+  const handleDeleteAccountRequest = () => {
+    Alert.alert(
+      "Delete Account Request",
+      "Are you sure you want to request account deletion? This action is permanent and cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteAccountMutation.mutateAsync();
+              Toast.show({
+                type: "success",
+                text1: "Account Deleted",
+                text2: "Your account has been permanently removed.",
+              });
+              await logout();
+            } catch (err: any) {
+              Toast.show({
+                type: "error",
+                text1: "Error",
+                text2: err?.message || "Failed to delete account",
+              });
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const renderBackdrop = useCallback(
     (props: any) => (
       <BottomSheetBackdrop
@@ -150,7 +205,7 @@ export default function ProfileScreen() {
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
                 <Bell size={20} color="#475569" strokeWidth={2} />
-                <Text style={styles.settingLabel}>Notifications</Text>
+                <Text style={styles.settingLabel}>Push Notifications</Text>
               </View>
               <Switch
                 value={notificationsEnabled}
@@ -159,6 +214,23 @@ export default function ProfileScreen() {
                 thumbColor="#FFFFFF"
               />
             </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.settingRow}>
+              <View style={styles.settingLeft}>
+                <Mail size={20} color="#475569" strokeWidth={2} />
+                <Text style={styles.settingLabel}>Email Alerts</Text>
+              </View>
+              <Switch
+                value={emailAlertsEnabled}
+                onValueChange={handleToggleEmailAlerts}
+                trackColor={{ false: '#e2e8f0', true: '#181818' }}
+                thumbColor="#FFFFFF"
+              />
+            </View>
+
+            <View style={styles.divider} />
 
             <View style={styles.settingRow}>
               <View style={styles.settingLeft}>
@@ -188,10 +260,22 @@ export default function ProfileScreen() {
               <ChevronRight size={20} color="#0f172a" />
             </TouchableOpacity>
 
+            <View style={styles.divider} />
+
             <TouchableOpacity style={styles.settingRow} onPress={() => openExternal("https://herutility.co.uk/privacy-policy/")}>
               <View style={styles.settingLeft}>
                 <Shield size={20} color="#475569" strokeWidth={2} />
                 <Text style={styles.settingLabel}>Privacy Policy</Text>
+              </View>
+              <ChevronRight size={20} color="#0f172a" />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.settingRow} onPress={handleReplayProductTour}>
+              <View style={styles.settingLeft}>
+                <Play size={20} color="#475569" strokeWidth={2} />
+                <Text style={styles.settingLabel}>Replay product tour</Text>
               </View>
               <ChevronRight size={20} color="#0f172a" />
             </TouchableOpacity>
@@ -210,6 +294,8 @@ export default function ProfileScreen() {
               <ChevronRight size={20} color="#0f172a" />
             </TouchableOpacity>
 
+            <View style={styles.divider} />
+
             <TouchableOpacity style={styles.settingRow} onPress={() => Linking.openURL("tel:08003688038")}>
               <View style={styles.settingLeft}>
                 <HelpCircle size={20} color="#475569" strokeWidth={2} />
@@ -223,6 +309,18 @@ export default function ProfileScreen() {
         {/* Danger zone */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: '#ef4444' }]}>Danger zone</Text>
+          <View style={[styles.card, { marginBottom: 16 }]}>
+            <TouchableOpacity style={styles.deleteAccountRow} onPress={handleDeleteAccountRequest}>
+              <View style={styles.deleteAccountTextContainer}>
+                <Text style={styles.deleteAccountTitle}>Delete Account Request</Text>
+                <Text style={styles.deleteAccountSubtitle}>
+                  Permanently remove your account. We may retain some records where required.
+                </Text>
+              </View>
+              <ChevronRight size={20} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity style={styles.logoutButton} onPress={() => logoutSheetRef.current?.present()}>
             <Text style={styles.logoutButtonText}>Log out</Text>
             <LogOut size={20} color="#FFFFFF" strokeWidth={2} />
@@ -298,7 +396,7 @@ const EditProfileModal = ({
       backgroundStyle={styles.sheetBackground}
       handleIndicatorStyle={styles.sheetIndicator}
       maxDynamicContentSize={500}
-      keyboardBehavior="interactive"
+      keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
     >
       <BottomSheetView>
@@ -668,5 +766,26 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "700",
     fontSize: 16,
+  },
+  deleteAccountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+  },
+  deleteAccountTextContainer: {
+    flex: 1,
+    paddingRight: 16,
+  },
+  deleteAccountTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#ef4444',
+    marginBottom: 4,
+  },
+  deleteAccountSubtitle: {
+    fontSize: 13,
+    color: '#64748b',
+    lineHeight: 18,
   },
 });

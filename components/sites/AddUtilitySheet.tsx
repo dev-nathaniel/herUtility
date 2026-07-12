@@ -2,15 +2,15 @@ import { useAuth } from '@/lib/auth';
 import { isValidUKPostcode } from "@/lib/validation";
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetBackdrop, BottomSheetFooter, BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import Toast from "react-native-toast-message";
 import { styles } from './sites.styles';
 
-export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialBusinessId, onDismiss }: any) => {
+export const AddUtilitySheet = ({ bottomSheetRef, businesses, sites, onSubmit, initialBusinessId, initialSiteId, onDismiss }: any) => {
     const { user } = useAuth();
-    const [step, setStep] = useState(1); // 1: Business, 2: Postcode (Existing only), 3: Fuel/Supplier, 4: Contract, 5: Email
+    const [step, setStep] = useState(1); // 1: Business, 2: Site Selection, 3: Fuel/Supplier, 4: Contract, 5: Email
     const [formType, setFormType] = useState("newBusiness");
     const [selectedBusinessIds, setSelectedBusinessIds] = useState<string[]>([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -18,29 +18,34 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialB
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isWaterDropdownOpen, setIsWaterDropdownOpen] = useState(false);
 
-    // Effect to handle initialBusinessId when sheet opens
+    // Site selection states
+    const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+    const [newSiteName, setNewSiteName] = useState("");
+    const [newSiteAddress, setNewSiteAddress] = useState("");
+    const [newSitePostcode, setNewSitePostcode] = useState("");
+    const [isSiteDropdownOpen, setIsSiteDropdownOpen] = useState(false);
+
+    // Effect to handle initialBusinessId & initialSiteId when sheet opens
     React.useEffect(() => {
         if (initialBusinessId && businesses.length > 0) {
-            const biz = businesses.find((b: any) => b.id === initialBusinessId);
-            if (biz) {
-                setPostcodes(prev => ({
-                    ...prev,
-                    [initialBusinessId]: biz.postcode || biz.address || ""
-                }));
-            }
             setSelectedBusinessIds([initialBusinessId]);
             setFormType("existing");
-            // If we pre-select, we might skip to step 2 or 3 depending on flow.
-            // But user likely wants to confirm details. Let's go to step 2 (postcode)
-            setStep(2);
+            if (initialSiteId) {
+                setSelectedSiteId(initialSiteId);
+                setStep(3); // Skip straight to fuel selection if site is preselected
+            } else {
+                setSelectedSiteId(null);
+                setStep(2);
+            }
         }
-    }, [initialBusinessId, businesses]);
+    }, [initialBusinessId, initialSiteId, businesses]);
 
     const [formData, setFormData] = useState({
         businessName: "",
         address: "",
         postcode: "",
         email: user?.email || "",
+        siteName: "Primary Site",
     });
 
     const [selectedFuels, setSelectedFuels] = useState<string[]>([]);
@@ -161,6 +166,12 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialB
         }
     };
 
+    const businessSites = useMemo(() => {
+        const activeBizId = selectedBusinessIds[0];
+        if (!activeBizId || !sites) return [];
+        return sites.filter((s: any) => s.businessId === activeBizId);
+    }, [selectedBusinessIds, sites]);
+
     const handleSubmit = async () => {
         setIsSubmitting(true);
         try {
@@ -169,8 +180,9 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialB
                 const newBusiness = {
                     id: newBusinessId,
                     name: formData.businessName,
-                    address: formData.address || "",
+                    address: formData.address || formData.postcode,
                     postcode: formData.postcode,
+                    siteName: formData.siteName || "Primary Site",
                     logo: formData.businessName.slice(0, 2).toUpperCase(),
                     color: "#6366f1",
                 };
@@ -194,24 +206,27 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialB
 
                 await onSubmit({ newBusiness, newContracts });
             } else {
-                // Existing businesses - create contracts for each selected business x each selected fuel
+                // Existing businesses - create contracts for the selected site/business x each selected fuel
                 const existingContracts: any[] = [];
-                selectedBusinessIds.forEach(bizId => {
-                    selectedFuels.forEach(fuel => {
-                        const fd = fuelDetails[fuel] || {};
-                        existingContracts.push({
-                            meterId: fd.meterId || "",
-                            businessId: bizId,
-                            fuel: fuel,
-                            end: fd.expiryWindow || "",
-                            status: "pending",
-                            rate: "TBD",
-                            usage: "TBD",
-                            cost: 0,
-                            supplier: fd.supplier || "",
-                            email: formData.email,
-                            postcode: postcodes[bizId],
-                        });
+                const bizId = selectedBusinessIds[0];
+
+                selectedFuels.forEach(fuel => {
+                    const fd = fuelDetails[fuel] || {};
+                    existingContracts.push({
+                        meterId: fd.meterId || "",
+                        businessId: bizId,
+                        siteId: selectedSiteId === "new" ? "new" : selectedSiteId,
+                        newSiteName: selectedSiteId === "new" ? newSiteName : undefined,
+                        newSiteAddress: selectedSiteId === "new" ? newSiteAddress : undefined,
+                        fuel: fuel,
+                        end: fd.expiryWindow || "",
+                        status: "pending",
+                        rate: "TBD",
+                        usage: "TBD",
+                        cost: 0,
+                        supplier: fd.supplier || "",
+                        email: formData.email,
+                        postcode: selectedSiteId === "new" ? newSitePostcode : (businessSites.find((s: any) => s.id === selectedSiteId)?.address || ""),
                     });
                 });
 
@@ -245,20 +260,31 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialB
                 address: "",
                 postcode: "",
                 email: user?.email || "",
+                siteName: "Primary Site",
             });
             setSelectedFuels([]);
             setFuelDetails({});
+
+            // Reset site states
+            setSelectedSiteId(null);
+            setNewSiteName("");
+            setNewSiteAddress("");
+            setNewSitePostcode("");
+            setIsSiteDropdownOpen(false);
         }, 300);
-    }, [bottomSheetRef, user?.email]);
+        if (onDismiss) onDismiss();
+    }, [bottomSheetRef, user?.email, onDismiss]);
 
     const handleBack = useCallback(() => {
-        if (step === 3 && formType === "newBusiness") {
+        if (step === 3 && initialSiteId) {
+            setStep(1);
+        } else if (step === 3 && formType === "newBusiness") {
             setStep(1); // Skip postcode step for new business
         } else if (step > 1) {
             if (initialBusinessId && step === 2) return;
             setStep((s) => s - 1);
         }
-    }, [step, formType, initialBusinessId]);
+    }, [step, formType, initialBusinessId, initialSiteId]);
 
     const getSelectedBusinessLabel = () => {
         if (selectedBusinessIds.length === 0) return "Select Business";
@@ -271,20 +297,22 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialB
 
     const isStep1Valid =
         formType === "newBusiness"
-            ? formData.businessName && isValidUKPostcode(formData.postcode)
+            ? formData.businessName && formData.siteName.trim() !== "" && isValidUKPostcode(formData.postcode)
             : selectedBusinessIds.length > 0;
 
     const isStep2Valid =
         step === 2 &&
-        selectedBusinessIds.every(
-            (id) => postcodes[id] && isValidUKPostcode(postcodes[id]),
-        );
+        selectedSiteId !== null &&
+        (selectedSiteId !== "new" ||
+            (newSiteName.trim() !== "" &&
+                newSitePostcode.trim() !== "" &&
+                isValidUKPostcode(newSitePostcode)));
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     const getStepTitle = () => {
         if (step === 1) return "Business details";
-        if (step === 2) return "Supply address";
+        if (step === 2) return "Select Site";
         if (step === 3) return "Select utilities";
         if (step >= 4 && step < 4 + selectedFuels.length) {
             const fuel = selectedFuels[step - 4];
@@ -364,7 +392,7 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialB
             backgroundStyle={styles.sheetBackground}
             handleComponent={renderHeader}
             footerComponent={renderFooter}
-            keyboardBehavior="interactive"
+            keyboardBehavior="extend"
             keyboardBlurBehavior="restore"
             onDismiss={onDismiss}
         >
@@ -430,6 +458,18 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialB
                                     />
                                 </View>
                                 <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Site Name</Text>
+                                    <BottomSheetTextInput
+                                        style={styles.input}
+                                        placeholder="e.g. Primary Site, Head Office"
+                                        placeholderTextColor="#94a3b8"
+                                        value={formData.siteName}
+                                        onChangeText={(text: string) =>
+                                            setFormData({ ...formData, siteName: text })
+                                        }
+                                    />
+                                </View>
+                                <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Postcode</Text>
                                     <BottomSheetTextInput
                                         style={[
@@ -486,11 +526,8 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialB
                                                             styles.dropdownItemActive,
                                                         ]}
                                                         onPress={() => {
-                                                            if (isSelected) {
-                                                                setSelectedBusinessIds(ids => ids.filter(id => id !== b.id));
-                                                            } else {
-                                                                setSelectedBusinessIds(ids => [...ids, b.id]);
-                                                            }
+                                                            setSelectedBusinessIds([b.id]);
+                                                            setIsDropdownOpen(false);
                                                         }}
                                                     >
                                                         <View
@@ -530,33 +567,159 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, onSubmit, initialB
                     </View>
                 )}
 
-                {/* STEP 2: POSTCODE (Existing Business Only) */}
+                {/* STEP 2: SITE SELECTION (Existing Business Only) */}
                 {step === 2 && (
                     <View>
                         <Text style={[styles.inputLabel, { marginBottom: 16 }]}>
-                            {selectedBusinessIds.length > 1
-                                ? "Are these the supply addresses?"
-                                : "Is this the supply address?"}
+                            Which site is this utility for?
                         </Text>
 
-                        {selectedBusinessIds.map(bizId => {
-                            const biz = businesses.find((b: any) => b.id === bizId);
-                            return (
-                                <View key={bizId} style={[styles.inputGroup, { marginBottom: 12 }]}>
-                                    <Text style={[styles.inputLabel, { fontSize: 10, marginBottom: 4 }]}>{biz?.name?.toUpperCase()}</Text>
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Select Site</Text>
+                            <TouchableOpacity
+                                style={styles.dropdown}
+                                onPress={() => setIsSiteDropdownOpen(!isSiteDropdownOpen)}
+                            >
+                                <Text
+                                    style={[
+                                        styles.dropdownText,
+                                        selectedSiteId === null && styles.dropdownPlaceholder,
+                                    ]}
+                                >
+                                    {selectedSiteId === null
+                                        ? "Select a Site"
+                                        : selectedSiteId === "new"
+                                        ? "Add a new site..."
+                                        : businessSites.find((s: any) => s.id === selectedSiteId)?.name || "Select a Site"}
+                                </Text>
+                                <Ionicons
+                                    name={isSiteDropdownOpen ? "chevron-up" : "chevron-down"}
+                                    size={20}
+                                    color="#94a3b8"
+                                />
+                            </TouchableOpacity>
+
+                            {isSiteDropdownOpen && (
+                                <NativeViewGestureHandler disallowInterruption={true}>
+                                    <ScrollView style={styles.dropdownList}>
+                                        {/* Option to select existing sites */}
+                                        {businessSites.map((s: any) => {
+                                            const isSelected = selectedSiteId === s.id;
+                                            return (
+                                                <TouchableOpacity
+                                                    key={s.id}
+                                                    style={[
+                                                        styles.dropdownItem,
+                                                        isSelected ? styles.dropdownItemActive : null,
+                                                    ]}
+                                                    onPress={() => {
+                                                        setSelectedSiteId(s.id);
+                                                        setIsSiteDropdownOpen(false);
+                                                    }}
+                                                >
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text
+                                                            style={[
+                                                                styles.dropdownItemText,
+                                                                isSelected ? styles.dropdownItemTextActive : null,
+                                                            ]}
+                                                        >
+                                                            {s.name}
+                                                        </Text>
+                                                        <Text style={{ fontSize: 12, color: "#94a3b8", marginTop: 4, fontWeight: "600" }}>
+                                                            {s.address}
+                                                        </Text>
+                                                    </View>
+                                                    {isSelected && (
+                                                        <Ionicons
+                                                            name="checkmark"
+                                                            size={18}
+                                                            color="#181818"
+                                                        />
+                                                    )}
+                                                </TouchableOpacity>
+                                            );
+                                        })}
+
+                                        {/* Option to create a new site */}
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.dropdownItem,
+                                                selectedSiteId === "new" ? styles.dropdownItemActive : null,
+                                            ]}
+                                            onPress={() => {
+                                                setSelectedSiteId("new");
+                                                setIsSiteDropdownOpen(false);
+                                            }}
+                                        >
+                                            <View style={{ flex: 1 }}>
+                                                <Text
+                                                    style={[
+                                                        styles.dropdownItemText,
+                                                        selectedSiteId === "new" ? styles.dropdownItemTextActive : null,
+                                                        { color: "#181818" }
+                                                    ]}
+                                                >
+                                                    + Add a new site...
+                                                </Text>
+                                            </View>
+                                            {selectedSiteId === "new" && (
+                                                <Ionicons
+                                                    name="checkmark"
+                                                    size={18}
+                                                    color="#181818"
+                                                />
+                                            )}
+                                        </TouchableOpacity>
+                                    </ScrollView>
+                                </NativeViewGestureHandler>
+                            )}
+                        </View>
+
+                        {/* If adding a new site, show Site Name and Address fields */}
+                        {selectedSiteId === "new" && (
+                            <View style={{ marginTop: 8 }}>
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Site Name</Text>
                                     <BottomSheetTextInput
                                         style={styles.input}
-                                        placeholder="Enter Postcode"
+                                        placeholder="e.g. London Office, Warehouse B"
                                         placeholderTextColor="#94a3b8"
-                                        value={postcodes[bizId]?.toUpperCase() || ""}
-                                        onChangeText={(text) => {
-                                            setPostcodes(prev => ({ ...prev, [bizId]: text.toUpperCase() }));
-                                        }}
-                                        autoCapitalize="characters"
+                                        value={newSiteName}
+                                        onChangeText={setNewSiteName}
                                     />
                                 </View>
-                            )
-                        })}
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Site Address</Text>
+                                    <BottomSheetTextInput
+                                        style={styles.input}
+                                        placeholder="e.g. 100 Victoria Street"
+                                        placeholderTextColor="#94a3b8"
+                                        value={newSiteAddress}
+                                        onChangeText={setNewSiteAddress}
+                                    />
+                                </View>
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Site Postcode</Text>
+                                    <BottomSheetTextInput
+                                        style={[
+                                            styles.input,
+                                            newSitePostcode && !isValidUKPostcode(newSitePostcode) && { borderColor: "#ef4444", borderWidth: 1 }
+                                        ]}
+                                        placeholder="e.g. SW1E 5JL"
+                                        placeholderTextColor="#94a3b8"
+                                        value={newSitePostcode}
+                                        onChangeText={(text) => setNewSitePostcode(text.toUpperCase())}
+                                        autoCapitalize="characters"
+                                    />
+                                    {newSitePostcode && !isValidUKPostcode(newSitePostcode) && (
+                                        <Text style={{ color: "#ef4444", fontSize: 12, marginTop: 4 }}>
+                                            Please enter a valid UK postcode
+                                        </Text>
+                                    )}
+                                </View>
+                            </View>
+                        )}
                     </View>
                 )}
 

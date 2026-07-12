@@ -96,12 +96,13 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <BottomSheetModalProvider>
-        <SafeAreaView style={{ flex: 1, backgroundColor: '#F2F4F8' }} edges={['top', 'bottom']}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }} edges={['top', 'bottom']}>
           <StatusBar style="dark" />
           <Stack>
             <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+            <Stack.Screen name="site-details" options={{ headerShown: false }} />
           </Stack>
         </SafeAreaView>
       </BottomSheetModalProvider>
