@@ -3,10 +3,15 @@ import { isValidUKPostcode } from "@/lib/validation";
 import { Ionicons } from '@expo/vector-icons';
 import { BottomSheetBackdrop, BottomSheetFooter, BottomSheetModal, BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import React, { useCallback, useState, useMemo } from 'react';
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View, Platform, Keyboard } from 'react-native';
 import { NativeViewGestureHandler } from 'react-native-gesture-handler';
 import Toast from "react-native-toast-message";
 import { styles } from './sites.styles';
+
+interface AddressSuggestion {
+  placeId: string;
+  description: string;
+}
 
 export const AddUtilitySheet = ({ bottomSheetRef, businesses, sites, onSubmit, initialBusinessId, initialSiteId, onDismiss }: any) => {
     const { user } = useAuth();
@@ -24,6 +29,86 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, sites, onSubmit, i
     const [newSiteAddress, setNewSiteAddress] = useState("");
     const [newSitePostcode, setNewSitePostcode] = useState("");
     const [isSiteDropdownOpen, setIsSiteDropdownOpen] = useState(false);
+
+    const [step1Suggestions, setStep1Suggestions] = useState<AddressSuggestion[]>([]);
+    const [step2Suggestions, setStep2Suggestions] = useState<AddressSuggestion[]>([]);
+
+    const handleAddressSearch = async (text: string, isStep1: boolean) => {
+        if (isStep1) {
+            setFormData(prev => ({ ...prev, address: text }));
+        } else {
+            setNewSiteAddress(text);
+        }
+
+        if (!text || text.length < 3) {
+            if (isStep1) setStep1Suggestions([]);
+            else setStep2Suggestions([]);
+            return;
+        }
+
+        const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+        if (!apiKey) {
+            return;
+        }
+
+        try {
+            const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(text)}&key=${apiKey}&components=country:gb&types=address`;
+            const response = await fetch(url);
+            const data = await response.json();
+            if (data.predictions) {
+                const results = data.predictions.map((p: any) => ({
+                    placeId: p.place_id,
+                    description: p.description,
+                }));
+                if (isStep1) setStep1Suggestions(results);
+                else setStep2Suggestions(results);
+            }
+        } catch (error) {
+            console.error("Error fetching places autocomplete:", error);
+        }
+    };
+
+    const handleSelectSuggestion = async (suggestion: AddressSuggestion, isStep1: boolean) => {
+        if (isStep1) {
+            setStep1Suggestions([]);
+        } else {
+            setStep2Suggestions([]);
+        }
+
+        const apiKey = process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+        if (!apiKey) return;
+
+        try {
+            const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${suggestion.placeId}&fields=address_components,formatted_address&key=${apiKey}`;
+            const response = await fetch(url);
+            const data = await response.json();
+            if (data.result) {
+                const components = data.result.address_components || [];
+                const postalCodeComponent = components.find((c: any) => c.types.includes("postal_code"));
+                const postcode = postalCodeComponent ? postalCodeComponent.long_name : "";
+
+                const streetNumber = components.find((c: any) => c.types.includes("street_number"))?.long_name || "";
+                const route = components.find((c: any) => c.types.includes("route"))?.long_name || "";
+                const town = components.find((c: any) => c.types.includes("postal_town") || c.types.includes("locality"))?.long_name || "";
+
+                const addressLine = `${streetNumber} ${route}`.trim() + (town ? `, ${town}` : "");
+                const finalAddress = addressLine || data.result.formatted_address;
+
+                if (isStep1) {
+                    setFormData(prev => ({
+                        ...prev,
+                        address: finalAddress,
+                        postcode: postcode.toUpperCase(),
+                    }));
+                } else {
+                    setNewSiteAddress(finalAddress);
+                    setNewSitePostcode(postcode.toUpperCase());
+                }
+            }
+        } catch (error) {
+            console.error("Error fetching place details:", error);
+        }
+    };
 
     // Effect to handle initialBusinessId & initialSiteId when sheet opens
     React.useEffect(() => {
@@ -297,7 +382,7 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, sites, onSubmit, i
 
     const isStep1Valid =
         formType === "newBusiness"
-            ? formData.businessName && formData.siteName.trim() !== "" && isValidUKPostcode(formData.postcode)
+            ? formData.businessName && formData.address.trim() !== "" && formData.siteName.trim() !== "" && isValidUKPostcode(formData.postcode)
             : selectedBusinessIds.length > 0;
 
     const isStep2Valid =
@@ -305,6 +390,7 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, sites, onSubmit, i
         selectedSiteId !== null &&
         (selectedSiteId !== "new" ||
             (newSiteName.trim() !== "" &&
+                newSiteAddress.trim() !== "" &&
                 newSitePostcode.trim() !== "" &&
                 isValidUKPostcode(newSitePostcode)));
 
@@ -383,17 +469,29 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, sites, onSubmit, i
         [step, selectedFuels.length, isSubmitting, isCurrentStepValid, handleNext, getButtonText]
     );
 
+    const snapPoints = useMemo(() => ['85%'], []);
+
+    React.useEffect(() => {
+        const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+        const subscription = Keyboard.addListener(hideEvent, () => {
+            bottomSheetRef.current?.snapToIndex(0);
+        });
+        return () => subscription.remove();
+    }, [bottomSheetRef]);
+
     return (
         <BottomSheetModal
             ref={bottomSheetRef}
-            enableDynamicSizing
+            snapPoints={snapPoints}
+            enableDynamicSizing={false}
             enablePanDownToClose
             backdropComponent={renderBackdrop}
             backgroundStyle={styles.sheetBackground}
             handleComponent={renderHeader}
             footerComponent={renderFooter}
-            keyboardBehavior="extend"
+            keyboardBehavior="interactive"
             keyboardBlurBehavior="restore"
+            android_keyboardInputMode="adjustResize"
             onDismiss={onDismiss}
         >
             <BottomSheetScrollView
@@ -468,6 +566,30 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, sites, onSubmit, i
                                             setFormData({ ...formData, siteName: text })
                                         }
                                     />
+                                </View>
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Site Address</Text>
+                                    <BottomSheetTextInput
+                                        style={styles.input}
+                                        placeholder="e.g. 100 Victoria Street"
+                                        placeholderTextColor="#94a3b8"
+                                        value={formData.address}
+                                        onChangeText={(text: string) => handleAddressSearch(text, true)}
+                                    />
+                                    {step1Suggestions.length > 0 && (
+                                        <ScrollView style={styles.dropdownList} keyboardShouldPersistTaps="handled">
+                                            {step1Suggestions.map((item) => (
+                                                <TouchableOpacity
+                                                    key={item.placeId}
+                                                    style={styles.dropdownItem}
+                                                    onPress={() => handleSelectSuggestion(item, true)}
+                                                >
+                                                    <Ionicons name="location-outline" size={16} color="#94a3b8" style={{ marginRight: 8 }} />
+                                                    <Text style={styles.dropdownItemText}>{item.description}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    )}
                                 </View>
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Postcode</Text>
@@ -696,8 +818,22 @@ export const AddUtilitySheet = ({ bottomSheetRef, businesses, sites, onSubmit, i
                                         placeholder="e.g. 100 Victoria Street"
                                         placeholderTextColor="#94a3b8"
                                         value={newSiteAddress}
-                                        onChangeText={setNewSiteAddress}
+                                        onChangeText={(text) => handleAddressSearch(text, false)}
                                     />
+                                    {step2Suggestions.length > 0 && (
+                                        <ScrollView style={styles.dropdownList} keyboardShouldPersistTaps="handled">
+                                            {step2Suggestions.map((item) => (
+                                                <TouchableOpacity
+                                                    key={item.placeId}
+                                                    style={styles.dropdownItem}
+                                                    onPress={() => handleSelectSuggestion(item, false)}
+                                                >
+                                                    <Ionicons name="location-outline" size={16} color="#94a3b8" style={{ marginRight: 8 }} />
+                                                    <Text style={styles.dropdownItemText}>{item.description}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                    )}
                                 </View>
                                 <View style={styles.inputGroup}>
                                     <Text style={styles.inputLabel}>Site Postcode</Text>
